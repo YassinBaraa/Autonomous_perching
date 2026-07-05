@@ -1,0 +1,20 @@
+[submodule "detection_pipeline"]
+	path = detection_pipeline
+	url = git@github.com:YassinBaraa/Diplomski_detection_pipeline.git
+	branch = rektor_modification
+[submodule "ibvs"]
+	path = ibvs
+	url = git@github.com:YassinBaraa/Diplomski_ibvs.git
+	branch = rektor_modification
+[submodule "UAV"]
+	path = UAV
+	url = git@github.com:YassinBaraa/Diplomski_uav.git
+	branch = rektor_modification
+[submodule "Diplomski_pearch_mission"]
+	path = Diplomski_pearch_mission
+	url = git@github.com:YassinBaraa/Diplomski_pearch_mission.git
+	branch = rektor_modification
+[submodule "model_training"]
+	path = model_training
+	url = git@github.com:YassinBaraa/Diplomski_model_training.git
+	branch = rektor_modification

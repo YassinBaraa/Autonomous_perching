@@ -1,0 +1,7 @@
+*.pt
+*/wandb
+*/runs
+*/.venv
+*/sam3
+*bag
+*.mp4
