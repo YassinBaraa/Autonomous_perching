@@ -1,0 +1,13 @@
+% TODO: finalize/align after Results
+
+\noindent\textbf{\imeprezime}
+
+\noindent\textbf{\naslovradaEN}
+
+\bigskip
+
+\noindent This paper describes the adaptation of an autonomous UAV branch-perching system, originally developed as part of a master's thesis, for a competition scenario in which the UAV starts already positioned beneath the branch, without relying on the OptiTrack external localization system and without using a time-of-flight (ToF) sensor to trigger the perching maneuver. The physical camera orientation has also changed, from the original forward-facing mount to an upward-facing one. The perception pipeline for branch detection and perch-point tracking, which operates purely in the image plane, is reused unchanged, while the ROS control node that depended on external localization is replaced with the open-source \texttt{ibvs\_perching} package, which commands the UAV directly through MAVROS using body-rate and climb-rate commands. The paper describes the axis remapping required between the perception output and the UAV commands in the new geometry, and [TODO: complete with experimental validation results].
+
+\bigskip
+
+\noindent\textbf{Key words:} unmanned aerial vehicle, branch perching, image-based visual servoing, autonomous control, computer vision

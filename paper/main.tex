@@ -1,0 +1,138 @@
+\documentclass[12pt,a4paper]{report}
+
+% --- Prilog 2, tocka 2: Times New Roman ili Arial, velicina 10/11/12, prored 1.5 ili 2 ---
+% Pravi "Times New Roman" (ttf-mscorefonts-installer), ucitan preko fontspec + LuaLaTeX.
+\usepackage{fontspec}
+\setmainfont{Times New Roman}
+\usepackage{setspace}
+\onehalfspacing % 1.5 reda; za dvostruki prored zamijeniti s \doublespacing
+
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage[english,croatian]{babel} % zadnji naveden (croatian) postaje glavni jezik dokumenta
+\usepackage{graphicx}
+\usepackage{caption}
+% Prilog 2, tocka 3: nazivi/opisi slika ISPOD slike, tablica IZNAD tablice (default u LaTeX-u)
+\usepackage{amsmath}
+\usepackage[hidelinks]{hyperref}
+\usepackage{csquotes}
+\usepackage[
+  style=numeric,
+  sorting=none
+]{biblatex}
+\addbibresource{references.bib}
+
+\newcommand{\naslovrada}{Autonomno prijanjanje bespilotne letjelice na granu bez oslanjanja na sustav vanjskog pozicioniranja}
+\newcommand{\naslovradaEN}{Autonomous UAV Branch Perching Without External Positioning}
+\newcommand{\imeprezime}{Baraa Yassin}
+\newcommand{\mentor}{prof.\ dr.\ sc.\ Matko Orsag}
+\newcommand{\ustrojbenajedinica}{Laboratoriju za robotiku i inteligentne sustave upravljanja (LARICS), Zavod za automatiku i računalno inženjerstvo, Fakultet elektrotehnike i računarstva}
+\newcommand{\akgod}{2025./2026.}
+
+\begin{document}
+\pagenumbering{roman} % privremeno, bez vidljivih brojeva do Uvoda (Prilog 2, tocka 8)
+\pagestyle{empty}
+
+% ============================================================
+% NASLOVNA STRANICA (Prilog 2, tocka 4)
+% ============================================================
+\begin{titlepage}
+\begin{center}
+Sveučilište u Zagrebu\\
+Fakultet elektrotehnike i računarstva
+
+\vspace{4cm}
+
+{\Large \imeprezime}
+
+\vspace{1cm}
+
+{\Large \bfseries \naslovrada}
+
+\vfill
+
+Zagreb, 2026.
+\end{center}
+\end{titlepage}
+
+% ============================================================
+% STRANICA S NAPOMENOM O MENTORU I NATJECAJU (Prilog 2, tocka 5)
+% ============================================================
+\thispagestyle{empty}
+\vspace*{6cm}
+\noindent
+Ovaj rad izrađen je u \ustrojbenajedinica{} pod vodstvom \mentor{} i predan je na natječaj za dodjelu Rektorove nagrade u akademskoj godini \akgod{}
+
+\newpage
+
+% ============================================================
+% POPIS KRATICA (Prilog 2, tocka 6)
+% ============================================================
+\chapter*{Popis kratica}
+\thispagestyle{empty}
+\begin{description}
+  \item[UAV] \emph{Unmanned Aerial Vehicle} -- bespilotna letjelica
+  \item[IBVS] \emph{Image-Based Visual Servoing} -- vizualno serviranje temeljeno na slici
+  \item[KLT] \emph{Kanade--Lucas--Tomasi} (praćenje značajki)
+  \item[ToF] \emph{Time-of-Flight} -- vremenski senzor udaljenosti
+  \item[ROS] \emph{Robot Operating System}
+  \item[UDP] \emph{User Datagram Protocol}
+  \item[FCU] \emph{Flight Control Unit} -- upravljačka jedinica leta
+\end{description}
+
+\newpage
+
+% ============================================================
+% SADRZAJ RADA (Prilog 2, tocka 7)
+% ============================================================
+\tableofcontents
+\thispagestyle{empty}
+
+\newpage
+
+% ============================================================
+% NUMERIRANJE STRANICA POCINJE OD UVODA (Prilog 2, tocka 8)
+% ============================================================
+\pagenumbering{arabic}
+\pagestyle{plain}
+
+\chapter{Uvod}
+\label{ch:uvod}
+\input{sections/uvod}
+
+\chapter{Hipoteza i ciljevi rada}
+\label{ch:hipoteza}
+\input{sections/hipoteza}
+
+\chapter{Materijal i metode}
+\label{ch:metode}
+\input{sections/metode}
+
+\chapter{Rezultati}
+\label{ch:rezultati}
+\input{sections/rezultati}
+
+\chapter{Rasprava}
+\label{ch:rasprava}
+\input{sections/rasprava}
+
+\chapter{Zaključci}
+\label{ch:zakljucci}
+\input{sections/zakljucci}
+
+\chapter*{Zahvale}
+\input{sections/zahvale}
+
+\printbibliography[heading=bibintoc,title={Popis literature}]
+
+% ============================================================
+% SAZETAK / SUMMARY (Prilog 2, tocka 7, podtocke i, j)
+% ============================================================
+\chapter*{Sažetak}
+\input{sections/sazetak}
+
+\selectlanguage{english}
+\chapter*{Summary}
+\input{sections/summary}
+\selectlanguage{croatian}
+
+\end{document}

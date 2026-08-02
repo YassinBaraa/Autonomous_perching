@@ -1,0 +1,16 @@
+\section{Hipoteza}
+\label{sec:hipoteza}
+
+Hipoteza ovog rada jest da se postojeći percepcijski cjevovod za detekciju i praćenje grane, razvijen za horizontalnu konfiguraciju kamere i prilazak s vanjskom lokalizacijom, može ponovno iskoristiti gotovo bez izmjena za scenarij u kojem je kamera okrenuta prema gore i u kojem letjelica ne raspolaže sustavom apsolutne lokalizacije, uz uvjet da se zamijeni isključivo upravljački sloj koji povezuje percepciju s naredbama letjelici.
+
+\section{Ciljevi rada}
+\label{sec:ciljevi}
+
+Glavni ciljevi ovog rada su:
+
+\begin{enumerate}
+  \item Prilagoditi postojeći cjevovod za detekciju grane i praćenje točke prijanjanja (razvijen u sklopu diplomskog rada) novoj orijentaciji kamere (prema gore umjesto prema naprijed) i provjeriti da percepcijski dio sustava ostaje ispravan bez izmjena u geometriji obrade slike.
+  \item Zamijeniti upravljački ROS čvor koji je ovisio o sustavu OptiTrack i o senzoru udaljenosti (ToF) za okidanje manevra prijanjanja paketom \texttt{ibvs\_perching}, koji upravlja letjelicom izravno preko MAVROS-a bez vanjske lokalizacije.
+  \item Odrediti i implementirati preslikavanje osi između izlaza percepcijskog cjevovoda (pogreška u slikovnoj ravnini) i naredbi tijela letjelice (kutne brzine, brzina penjanja), prilagođeno geometriji u kojoj letjelica polazi ispod grane i prijanjanje izvodi pretežno vertikalnim približavanjem.
+  \item Provesti eksperimentalnu provjeru prilagođenog sustava i usporediti ponašanje s onim opisanim u izvornom diplomskom radu.
+\end{enumerate}

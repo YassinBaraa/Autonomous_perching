@@ -1,0 +1,79 @@
+\section{Teorijska podloga}
+\label{sec:teorijska-podloga}
+
+\subsection{Segmentacija instanci}
+Segmentacija instanci zadatak je računalnog vida koji kombinira detekciju objekata i semantičku segmentaciju. Za razliku od detekcije objekata, koja proizvodi samo okvire (\emph{bounding box}), i semantičke segmentacije, koja svakom pikselu pridružuje oznaku klase bez razlikovanja pojedinačnih objekata, segmentacija instanci za svaku pojedinu instancu objekta u slici proizvodi i okvir i masku na razini piksela. Svakom pikselu unutar maske pridružuje se vrijednost pouzdanosti koja izražava vjerojatnost da pripada detektiranoj instanci.
+
+\subsection{Rubna umjetna inteligencija i kvantizacija modela}
+Rubna umjetna inteligencija (\emph{edge AI}) odnosi se na izvođenje modela umjetne inteligencije izravno na ugrađenim ili rubnim uređajima, poput Raspberry Pi računala, umjesto oslanjanja na oblak ili poslužiteljsko računalstvo. Korišteni modeli u pravilu su istovjetni svojim punoopsežnim inačicama, uz ključnu razliku da su kvantizirani. Kvantizacija je postupak smanjenja preciznosti težina modela, tipično s 32-bitnog zapisa s pomičnim zarezom na 8-bitni cjelobrojni zapis, čime se znatno smanjuje potrošnja memorije i računalno opterećenje, omogućujući zaključivanje u stvarnom vremenu na maloj snazi.
+
+\subsection{Optički tok i praćenje značajki}
+Optički tok temelji se na praćenju istih značajki kroz više uzastopnih slika snimljenih u različitim trenucima. Pretpostavlja se da se osvjetljenje značajke ne mijenja bitno između slika. Značajke koje se prate prvo se identificiraju detektorom kutova poput FAST ili Harris, koji pronalazi točke u slici dovoljno izražene da se mogu pouzdano pratiti. Lokalni prozor oko svake značajke potom se koristi za pronalaženje njezinog odgovarajućeg položaja u sljedećoj slici minimizacijom razlike u intenzitetu piksela. Ovakav pristup sužava prostor pretrage i čini postupak izvedivim u stvarnom vremenu.
+
+\subsection{Vizualno serviranje temeljeno na slici}
+Vizualno serviranje temeljeno na slici (IBVS) metoda je upravljanja koja slikovnu informaciju izravno koristi kao ulaz u upravljačku petlju. Pogreška se definira kao udaljenost u pikselima između detektirane točke prijanjanja i središta slike. Ta se pogreška dovodi proporcionalnom regulatoru koji generira naredbu brzine za letjelicu, vodeći točku prijanjanja prema središtu slike. Upravljačka petlja izvodi se kontinuirano: svaka iteracija preuzima novu sliku, ponovno izračunava pogrešku i izdaje novu naredbu brzine sve dok se pogreška ne minimizira.
+
+\section{Sklopovlje}
+\label{sec:sklopovlje}
+
+\subsection{Platforma letjelice}
+Letjelica korištena u ovom radu izgrađena je na 7-inčnom karbonskom okviru, odabranom zbog krutosti i male mase. Pogon osiguravaju četiri \emph{brushless} motora T-Motor F90 2810 predviđena za propelere veličine 7 do 8 inča. Upravljanje letom obavlja SpeedyBee F405 upravljačka jedinica koja koristi MAVLink protokol za komunikaciju s računalom na letjelici.
+
+U odnosu na konfiguraciju iz diplomskog rada, natjecateljski scenarij pretpostavlja drukčije postavljanje kamere -- kamera je fizički okrenuta prema gore umjesto prema naprijed -- što zahtijeva novi nosač kamere te izmjenu geometrije preslikavanja pogreške iz slikovne ravnine u naredbe letjelici (vidi Odjeljak~\ref{subsec:preslikavanje-osi}).
+
+\subsection{Računalo i senzori na letjelici}
+Računalo na letjelici je Raspberry Pi 5 s 8 GB radne memorije, uz Raspberry Pi AI Hat+ dodatak za sklopovski ubrzano zaključivanje modela. Kao izvor slike koristi se Arduino Nicla Vision kamera s integriranim ToF senzorom udaljenosti. Za razliku od diplomskog rada, u ovom se radu ToF očitanje ne koristi za okidanje manevra prijanjanja -- ono je predviđeno za drugu namjenu izvan opsega ovog rada -- pa manevar prijanjanja mora biti okinut na temelju drugog signala (vidi Odjeljak~\ref{subsec:prijanjanje}).
+
+Za prijanjanje se koristi prilagođeni 3D-tiskani pasivni hvataljka s oprugom, izrađena od PETG materijala, montirana na okvir letjelice. Hvataljka ostaje otvorena dok se na unutarnji dio čeljusti ne primijeni dovoljna sila, nakon čega se hvataljka zatvara.
+
+\section{Implementacija sustava}
+\label{sec:implementacija}
+
+\subsection{Cjevovod za detekciju}
+\label{subsec:cjevovod}
+
+Cjevovod za detekciju grane preuzet je gotovo bez izmjena iz diplomskog rada, budući da je riječ o obradi isključivo u slikovnoj ravnini, neovisnoj o fizičkoj orijentaciji kamere u prostoru. Cjevovod je dizajniran modularno: svi razredi izvora slike dijele zajednički roditeljski razred, a svi koraci naknadne obrade nasljeđuju zajednički razred \texttt{Stage}. Podaci proizvedeni u svakom koraku pohranjuju se u strukturi \texttt{PipelineContext}, čime koraci nisu međusobno čvrsto povezani i mogu se zamjenjivati ili uklanjati bez utjecaja na ostatak cjevovoda.
+
+Praćenje objekata provodi se algoritmom ByteTrack, koji kombinira Kalmanov filtar s Mađarskim algoritmom za povezivanje detekcija kroz uzastopne slike na temelju preklapanja okvira. Nakon toga slijede četiri koraka naknadne obrade: izdvajanje binarne maske pragiranjem izlazne pouzdanosti segmentacije, izračun mape udaljenosti (\emph{distance heatmap}) Euklidskom transformacijom udaljenosti radi određivanja najdebljeg i najstabilnijeg dijela grane, računanje medijalne osi (kostura) binarne maske radi ograničavanja kandidata na središnjicu grane, te konačno bodovanje kandidata težinskom funkcijom koja kombinira pouzdanost detekcije, udaljenost od središta slike i veličinu detekcije.
+
+Nakon početnog razdoblja zagrijavanja (\emph{warmup}) od približno 20 sekundi, tijekom kojeg se prikupljaju najbolji kandidati iz svake slike, prikupljene točke grupiraju se algoritmom hijerarhijskog grupiranja s pragom udaljenosti od 30 piksela. Najpopunjenija skupina odabire se kao konačna točka prijanjanja (\emph{final point}), nakon čega se model detekcije prestaje izvoditi, a praćenje preuzima KLT algoritam opisan u nastavku.
+
+\subsection{Vizualno serviranje temeljeno na slici (IBVS)}
+\label{subsec:ibvs}
+
+Nakon zaključavanja konačne točke, IBVS izdvaja FAST i Harris kutne značajke iz referentne slike u lokalnoj okolini točke prijanjanja te pohranjuje pomak svake značajke u odnosu na tu točku. U svakoj sljedećoj slici značajke se prate KLT (\emph{Kanade--Lucas--Tomasi}) algoritmom optičkog toka, a položaj točke prijanjanja procjenjuje se primjenom pohranjenih pomaka na trenutne položaje praćenih značajki. Time se izbjegava ponovno pokretanje modela detekcije za svaku sliku, čime se smanjuje računalno opterećenje i omogućuje praćenje u stvarnom vremenu.
+
+Pogreška se računa kao udaljenost u pikselima između procijenjenog položaja točke prijanjanja i središta slike, zasebno za vodoravnu i okomitu os. Ova komponenta sustava također se preuzima bez izmjena iz diplomskog rada, jer izlaz IBVS-a ostaje par vrijednosti pogreške u slikovnoj ravnini (\texttt{error\_x}, \texttt{error\_y}) bez ugrađene pretpostavke o fizičkoj orijentaciji kamere -- preslikavanje tih vrijednosti u naredbe letjelici u potpunosti je izmješteno u upravljački sloj opisan u nastavku.
+
+\subsection{Zamjena upravljačkog sloja}
+\label{subsec:zamjena-upravljanja}
+
+U diplomskom radu upravljanje letjelicom izvodio je namjenski razvijeni ROS čvor koji je koristio OptiTrack odometriju za apsolutno pozicioniranje te trokoračni konačni automat (ALIGNING -- APPROACHING -- PERCHING) u kojem su ispravci iz IBVS-a preslikavani u naredbe apsolutnog položaja: vodoravna pogreška slike preslikavala se u y-os letjelice, okomita pogreška u z-os, dok se x-os (smjer prilaska) pomicala unaprijed fiksnim korakom sve dok ToF senzor ne bi zabilježio udaljenost ispod praga, nakon čega bi se izvela dvokoračna trajektorija prijanjanja.
+
+Budući da natjecateljski scenarij ne raspolaže sustavom OptiTrack niti koristi ToF senzor za okidanje prijanjanja, taj se upravljački čvor u potpunosti zamjenjuje otvorenim paketom \texttt{ibvs\_perching}~\cite{ibvs_perching}. Taj paket ne koristi kontroler pozicije niti vanjsku lokalizaciju: letjelicom upravlja izravno preko sučelja \texttt{mavros/setpoint\_raw/attitude}, šaljući naredbe kutne brzine tijela (\emph{body rate}) za bočno poravnanje te naredbu brzine penjanja (kroz polje \texttt{thrust}, protumačeno u ArduPilot GUIDED načinu rada kao naredba brzine penjanja, a ne kao sirovi potisak) za okomiti prilazak.
+
+Sučelje između percepcije i ovog upravljačkog sloja jest poruka \texttt{PointStamped} na temi \texttt{ibvs/target\_point}, u kojoj \texttt{x} i \texttt{y} predstavljaju normaliziran pomak ciljne točke od središta slike, a \texttt{z} (opcionalno) procijenjenu udaljenost do cilja. Ovime se zadržava jasna granica između percepcijskog cjevovoda (koji ne zna ništa o geometriji letjelice) i upravljačkog sloja (koji ne zna ništa o tome kako je točka detektirana) -- ista podjela odgovornosti koja je postojala i u izvornom sustavu iz diplomskog rada.
+
+\subsubsection{Preslikavanje osi za kameru okrenutu prema gore}
+\label{subsec:preslikavanje-osi}
+
+% TODO: ovo poglavlje dovrsiti nakon eksperimentalne provjere stvarnog predznaka i
+% osi -- trenutno opisuje namjeravano ponasanje, ne izmjereno
+
+Paket \texttt{ibvs\_perching} izvorno pretpostavlja kameru okrenutu prema dolje, gdje vodoravni pomak u slici (\texttt{point.x}) odgovara pomaku unaprijed u koordinatnom sustavu letjelice, a okomiti pomak u slici (\texttt{point.y}) odgovara pomaku ulijevo/udesno. Budući da je u ovom radu kamera okrenuta prema gore, a letjelica polazi već pozicionirana ispod grane, preslikavanje osi mora se iznova izvesti: os prilaska više nije vodoravna os letjelice (naprijed), nego okomita os (penjanje), dok se poravnanje u preostale dvije osi izvodi analogno prethodnom sustavu.
+
+\subsection{Manevar prijanjanja bez ToF okidača}
+\label{subsec:prijanjanje}
+
+% TODO: opisati konacan mehanizam okidanja nakon eksperimentalne provjere
+
+Budući da senzor udaljenosti nije dostupan za okidanje manevra prijanjanja, potreban je drukčiji signal za prijelaz iz faze poravnanja u fazu izvođenja manevra. Kako letjelica polazi s poznate, fiksne udaljenosti ispod grane, razmatra se okidanje na temelju vremena provedenog u stanju poravnanja unutar zadanog praga pogreške, umjesto na temelju izravnog mjerenja udaljenosti.
+
+\subsection{Treniranje modela}
+\label{subsec:treniranje-modela}
+
+Model za segmentaciju grana (YOLOv8m-seg) preuzet je bez izmjena iz diplomskog rada. Skup podataka za treniranje sastojao se od fotografija grana snimljenih iz bočne perspektive, a maske za segmentaciju automatski su generirane modelom SAM3 na temelju tekstualnog upita. Model je izvezen u ONNX format i zatim kompiliran u Hailo izvršni format (\texttt{.hef}) za izvođenje na Raspberry Pi AI Hat+ akceleratoru.
+
+% TODO: napomenuti u Raspravi da skup podataka trenutno ne sadrzi fotografije grana
+% snimljene iz perspektive kamere okrenute prema gore (nebo kao pozadina), sto moze
+% utjecati na tocnost detekcije u novoj konfiguraciji

@@ -5,3 +5,16 @@
 */sam3
 *bag
 *.mp4
+
+# LaTeX build artifacts (paper/)
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.toc
+*.synctex.gz

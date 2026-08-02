@@ -1,0 +1,13 @@
+% TODO: dovrsiti/uskladiti nakon Rezultata
+
+\noindent\textbf{\imeprezime}
+
+\noindent\textbf{\naslovrada}
+
+\bigskip
+
+\noindent Ovaj rad opisuje prilagodbu sustava za autonomno prijanjanje bespilotne letjelice na granu, izvorno razvijenog u sklopu diplomskog rada, za natjecateljski scenarij u kojem letjelica polazi već pozicionirana ispod grane, bez oslanjanja na sustav vanjske lokalizacije OptiTrack te bez korištenja senzora udaljenosti (ToF) za okidanje manevra prijanjanja. Fizička orijentacija kamere također je izmijenjena, s izvorne vodoravne (prema naprijed) na okomitu (prema gore). Percepcijski cjevovod za detekciju grane i praćenje točke prijanjanja, koji radi isključivo u slikovnoj ravnini, preuzet je bez izmjena, dok je upravljački ROS čvor koji je ovisio o vanjskoj lokalizaciji zamijenjen otvorenim paketom \texttt{ibvs\_perching}, koji letjelicom upravlja izravno preko MAVROS-a naredbama kutne brzine tijela i brzine penjanja. Rad opisuje potrebno preslikavanje osi između izlaza percepcije i naredbi letjelici u novoj geometriji te [TODO: dopuniti rezultatima eksperimentalne provjere].
+
+\bigskip
+
+\noindent\textbf{Ključne riječi:} bespilotna letjelica, prijanjanje na granu, vizualno serviranje temeljeno na slici, autonomno upravljanje, računalni vid
