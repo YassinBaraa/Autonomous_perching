@@ -10,11 +10,10 @@
 	path = UAV
 	url = git@github.com:YassinBaraa/Diplomski_uav.git
 	branch = rektor_modification
-[submodule "Diplomski_pearch_mission"]
-	path = Diplomski_pearch_mission
-	url = git@github.com:YassinBaraa/Diplomski_pearch_mission.git
-	branch = rektor_modification
 [submodule "model_training"]
 	path = model_training
 	url = git@github.com:YassinBaraa/Diplomski_model_training.git
 	branch = rektor_modification
+[submodule "ibvs_perching"]
+	path = ibvs_perching
+	url = https://github.com/JakobDomislovic/ibvs_perching.git
