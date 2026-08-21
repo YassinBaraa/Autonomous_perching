@@ -1,51 +1,54 @@
 # UDP Client
 
-Runs the full perching stack (detection → IBVS → control) and sends pixel error and ToF distance to the flight controller over UDP each frame. Also records raw video to disk.
+Runs the full perching stack (camera → detection → IBVS) and sends the perch/land point in pixel coordinates over UDP each frame. `main_record.py` also records raw video to disk; `main.py` is the same pipeline without recording.
 
 ---
 
 ## What It Does
 
-`main_record.py` is the top-level entry point for the complete system:
+Both entry points call `pipeline_factory.build_pipeline()`, which:
 
-1. Builds a `DetectionPipeline` (NiclaSource + HailoSegDetector or MP4 + YOLO)
-2. Wraps it in an IBVS pipeline (KLT tracking + PointController)
-3. Each frame: writes to MP4, sends UDP packet, prints verbose status
+1. Builds a raw camera source (DSJ / Nicla / Pi camera / MP4 — see below) — this is independent of detection mode; ArUco is just a detector choice, not a camera choice
+2. In `"branch"` mode, wraps it in the segmentation `DetectionPipeline`; in `"aruco"` mode, wraps it directly in `ArucoSource`
+3. Wraps whichever source in the IBVS pipeline (KLT tracking + PointController for local visualization)
+
+Each frame, whichever entry point you run sends a UDP packet with the current target point (KLT-tracked post-lock, or the raw detection/ArUco point pre-lock).
 
 ---
 
 ## UDP Packet Format
 
-JSON sent to `192.168.1.90:5005` each frame that has a valid control error:
+JSON sent to `192.168.0.128:5005` (see `UDPSender` in `client/udp_client.py`) each frame that has a target point:
 
 ```json
-{
-  "error_x":    -12.4,
-  "error_y":    3.1,
-  "tof":        480.0,
-  "timestamp":  1748000000.0
-}
+{"px": 412.3, "py": 198.7}
 ```
 
-| Field | Description |
-|-------|-------------|
-| `error_x` | Pixel distance of branch point from frame center (positive = right) |
-| `error_y` | Pixel distance from frame center (positive = down) |
-| `tof` | ToF reading from Nicla Vision in mm, `-1.0` if unavailable |
-| `timestamp` | Unix timestamp |
+`px`/`py` are the perch/land point in pixel coordinates (image space, not offset from center). Nothing else is sent — no ToF/distance, it isn't used anywhere in the stack anymore.
 
-The Docker-side ROS node (`udp_receiver_node.py`) receives this and publishes to `/perch/error_x`, `/perch/error_y`, `/perch/tof`.
+> **Receiving side note:** this repo has no UDP receiver for `ibvs_perching` (the current MAVROS/docker package) — it expects an `ibvs/target_point` `PointStamped` published directly in ROS (see `ibvs_perching/scripts/aruco_detector.py`). Bridging this UDP packet into `ibvs/target_point` would need a small ROS node on the docker side — out of scope here unless you want it built.
 
 ---
 
-## Source Selection
+## Source & Detection Mode Selection
 
-Set `USE_NICLA` at the top of `main_record.py`:
+Both `main.py` and `main_record.py` share the same switch — set these at the top of `pipeline_factory.py`:
 
 ```python
-USE_NICLA = True   # Nicla Vision camera + Hailo-8 .hef model
-USE_NICLA = False  # MP4 file + YOLO .pt model
+# Camera — independent of detection mode
+SOURCE_TYPE = "dsj"      # DSJ-3079-HE USB camera (default)
+SOURCE_TYPE = "nicla"    # Nicla Vision camera over USB serial
+SOURCE_TYPE = "camera"   # Raspberry Pi camera via picamera2
+SOURCE_TYPE = "mp4"      # video file, for offline testing
+
+# Detector
+DETECTION_MODE = "branch"  # branch segmentation pipeline -> final_point
+DETECTION_MODE = "aruco"   # direct ArUco marker detection -> ibvs/sources/ArucoSource.py
 ```
+
+`ArucoSource` has no warmup, unlike branch mode: it detects fresh every frame and hands the point straight to IBVSPipeline, which locks KLT the instant a detection appears (branch mode still needs its multi-frame warmup/clustering since skeleton-based candidates are noisy; ArUco detection is essentially exact and false-positive-free, so there's nothing to average over).
+
+It detects any marker from the configured dictionary (`ARUCO_DICTIONARY`, default `"auto"` — tries every predefined dictionary each frame and uses whichever finds the tag, since there's no way to know which family a given printed/generated marker uses) — it doesn't filter by marker ID either, since this is a single-tag perch/land setup, not multi-tag identification. **Because detection now runs every frame forever (not just during a bounded warmup window), `"auto"`'s per-frame cost is no longer bounded** — set `ARUCO_DICTIONARY` to a specific name (e.g. `"DICT_4X4_50"`) once you know your tag's dictionary, to skip the multi-dictionary scan and keep detection cheap on every frame. It also requires **opencv-contrib-python** (`cv2.aruco`) — plain `opencv-python` does not include it.
 
 ---
 
@@ -53,11 +56,12 @@ USE_NICLA = False  # MP4 file + YOLO .pt model
 
 ```
 UDP_client/
+├── pipeline_factory.py  # Shared camera + detection-mode selection, used by both entry points below
 ├── main_record.py       # Full pipeline entry point with recording + UDP send
-├── main.py              # Minimal entry point (no recording)
+├── main.py              # Same pipeline, no recording
 ├── client/
 │   └── udp_client.py    # UDPSender — wraps socket, sends JSON
-└── recordings/          # MP4 recordings saved here (timestamped)
+└── recordings/          # MP4 recordings saved here (timestamped, main_record.py only)
 ```
 
 ---
@@ -66,35 +70,28 @@ UDP_client/
 
 ```bash
 cd UDP_client
-python3 main_record.py
+python3 main_record.py   # with recording + local display (if DISPLAY is set)
+python3 main.py          # minimal, UDP send only
 ```
 
-Recordings are saved to `recordings/YYYYMMDD_HHMMSS_raw.mp4`.
+`main_record.py` saves one timestamped run to up to three files in `recordings/`:
+
+| File | Contents |
+|---|---|
+| `YYYYMMDD_HHMMSS_raw.mp4` | Unannotated camera frames |
+| `YYYYMMDD_HHMMSS_ibvs_overlay.mp4` | The "IBVS" window — tracked features, target point, crosshair, velocity arrow |
+| `YYYYMMDD_HHMMSS_detection_overlay.mp4` | The "Detection Pipeline" window — branch segmentation debug overlay (`"branch"` mode only) |
+
+All three are written whether or not a display is attached (`HAS_DISPLAY` only gates the live `cv2.imshow` windows, not recording).
 
 Press `q` in the display window (if `DISPLAY` is set) to stop, or `Ctrl+C`.
-
----
-
-## Receiving (Docker / ROS side)
-
-The perch mission launch file starts the receiver automatically:
-
-```bash
-roslaunch pearch_mission perch_mission.launch
-```
-
-Or manually:
-
-```bash
-rosrun pearch_mission udp_receiver_node.py
-```
 
 ---
 
 ## Dependencies
 
 ```bash
-pip install opencv-python numpy pyserial
+pip install opencv-contrib-python numpy pyserial
 
 # Plus all detection_pipeline and ibvs dependencies
 pip install ultralytics supervision scipy scikit-image pyyaml hailo_platform
