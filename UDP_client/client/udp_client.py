@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 
 class UDPSender:
-    def __init__(self, host="192.168.99.114", port=5005):
+    def __init__(self, host="192.168.1.194", port=5005):
         self._addr = (host, port)
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

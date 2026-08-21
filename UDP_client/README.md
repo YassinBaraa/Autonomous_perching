@@ -46,7 +46,9 @@ DETECTION_MODE = "branch"  # branch segmentation pipeline -> final_point
 DETECTION_MODE = "aruco"   # direct ArUco marker detection -> ibvs/sources/ArucoSource.py
 ```
 
-`ArucoSource` detects any marker from the configured dictionary (`ARUCO_DICTIONARY`, default `"auto"` — tries every predefined dictionary during warmup and uses whichever finds the tag, since there's no way to know which family a given printed/generated marker uses; set it to a specific name like `"DICT_4X4_50"` once you know yours, to skip the scan) — it doesn't filter by marker ID either, since this is a single-tag perch/land setup, not multi-tag identification. It also requires **opencv-contrib-python** (`cv2.aruco`) — plain `opencv-python` does not include it.
+`ArucoSource` has no warmup, unlike branch mode: it detects fresh every frame and hands the point straight to IBVSPipeline, which locks KLT the instant a detection appears (branch mode still needs its multi-frame warmup/clustering since skeleton-based candidates are noisy; ArUco detection is essentially exact and false-positive-free, so there's nothing to average over).
+
+It detects any marker from the configured dictionary (`ARUCO_DICTIONARY`, default `"auto"` — tries every predefined dictionary each frame and uses whichever finds the tag, since there's no way to know which family a given printed/generated marker uses) — it doesn't filter by marker ID either, since this is a single-tag perch/land setup, not multi-tag identification. **Because detection now runs every frame forever (not just during a bounded warmup window), `"auto"`'s per-frame cost is no longer bounded** — set `ARUCO_DICTIONARY` to a specific name (e.g. `"DICT_4X4_50"`) once you know your tag's dictionary, to skip the multi-dictionary scan and keep detection cheap on every frame. It also requires **opencv-contrib-python** (`cv2.aruco`) — plain `opencv-python` does not include it.
 
 ---
 

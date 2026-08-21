@@ -24,12 +24,12 @@ MP4_PATH = None  # only used when SOURCE_TYPE == "mp4"; None = detection_pipelin
 # --- Detection mode selection ---
 # "branch" = tree branch segmentation pipeline -> final_point
 # "aruco"  = direct ArUco marker detection -> ibvs/sources/ArucoSource.py
-DETECTION_MODE = "aruco"
-# "auto" tries every predefined ArUco dictionary during warmup and uses whichever
-# finds the tag (see ArucoSource.py) -- only costs anything during the warmup
-# window, never during flight. Set to a specific name (e.g. "DICT_4X4_50") once
-# you know your tag's dictionary, to detect on every frame at minimal cost.
-ARUCO_DICTIONARY = "auto"
+DETECTION_MODE = "branch"
+# "auto" tries every predefined ArUco dictionary EVERY frame (no warmup, see
+# ArucoSource.py) and uses whichever finds the tag -- costs more per frame than
+# pinning one. Set to a specific name (e.g. "DICT_4X4_50") once you know your
+# tag's dictionary, to keep detection cheap on every frame.
+ARUCO_DICTIONARY = "DICT_ARUCO_ORIGINAL"
 
 
 def _load_aruco_source_class():
@@ -186,6 +186,12 @@ def build_pipeline(record_prefix=None, fps=10):
         feature_extractor=feature_extractor,
         tracker=tracker,
         controller=controller,
+        # Branch mode only: once KLT locks, read the camera directly instead
+        # of through DetectionPipelineSource, so the expensive Hailo detect +
+        # postprocessing chain only runs while actually searching for a lock,
+        # not on every already-tracked frame. None in ArUco mode, where
+        # `source` never runs anything heavy in the first place.
+        raw_source=dp_source if DETECTION_MODE == "branch" else None,
     )
 
     return source, pipeline

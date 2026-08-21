@@ -3,6 +3,7 @@ import sys
 import os
 import cv2
 import numpy as np
+import time
 from pathlib import Path
 from datetime import datetime
 
@@ -31,7 +32,9 @@ def main():
     frame_count = 0
 
     try:
+        t_prev_frame = time.monotonic()
         for frame_count, ctx in enumerate(pipeline.run(), 1):
+            t_loop0 = time.monotonic()
             if writer is None:
                 h, w = ctx.frame.shape[:2]
                 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -40,13 +43,16 @@ def main():
                 print(f"Recording raw to {out_path}")
                 print(f"Recording IBVS overlay to {ibvs_out_path}")
 
+            t_w1_0 = time.monotonic()
             writer.write(ctx.frame)
+            t_w1_1 = time.monotonic()
 
             ctrl = ctx.debug.get("controller", {})
             velocity = ctx.debug.get("velocity_command")
             n_tracked = len(ctx.extracted_features) if ctx.extracted_features is not None else 0
             target_point = ctx.estimated_point if ctx.estimated_point is not None else ctx.point
 
+            t_udp0 = time.monotonic()
             if target_point is not None:
                 sender.send(int(round(target_point[0])), int(round(target_point[1])))
                 print(f"[main] Frame {frame_count}: UDP sent — "
@@ -54,6 +60,7 @@ def main():
             else:
                 print(f"[main] Frame {frame_count}: no target point — "
                       f"source={ctrl.get('point_source','none')}, tracked={n_tracked}")
+            t_udp1 = time.monotonic()
 
             vis = ctx.frame.copy()
             h, w = vis.shape[:2]
@@ -77,12 +84,23 @@ def main():
                 )
                 cv2.arrowedLine(vis, center, tip, (0, 165, 255), 2, tipLength=0.3)
 
+            t_w2_0 = time.monotonic()
             ibvs_writer.write(vis)
+            t_w2_1 = time.monotonic()
 
             if HAS_DISPLAY:
                 cv2.imshow('IBVS', vis)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
+
+            t_loop1 = time.monotonic()
+            print(f"[main] Frame {frame_count}: TIMING — "
+                  f"raw_write={1000*(t_w1_1-t_w1_0):.0f}ms "
+                  f"udp_send={1000*(t_udp1-t_udp0):.0f}ms "
+                  f"overlay_write={1000*(t_w2_1-t_w2_0):.0f}ms "
+                  f"loop_total={1000*(t_loop1-t_loop0):.0f}ms "
+                  f"since_prev_frame={1000*(t_loop0-t_prev_frame):.0f}ms")
+            t_prev_frame = t_loop0
 
     finally:
         if writer is not None:
