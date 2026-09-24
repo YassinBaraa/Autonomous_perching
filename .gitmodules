@@ -17,4 +17,4 @@
 [submodule "ibvs_perching"]
 	path = ibvs_perching
 	url = https://github.com/JakobDomislovic/ibvs_perching.git
-	branch = pios_perching
+	branch = master
