@@ -50,7 +50,8 @@ def main():
             ctrl = ctx.debug.get("controller", {})
             velocity = ctx.debug.get("velocity_command")
             n_tracked = len(ctx.extracted_features) if ctx.extracted_features is not None else 0
-            target_point = ctx.estimated_point if ctx.estimated_point is not None else ctx.point
+            # Only a locked, tracked point is ever sent (nothing while idle or lost)
+            target_point = ctx.estimated_point
 
             t_udp0 = time.monotonic()
             if target_point is not None:
@@ -59,7 +60,7 @@ def main():
                       f"point=({target_point[0]}, {target_point[1]})")
             else:
                 print(f"[main] Frame {frame_count}: no target point — "
-                      f"source={ctrl.get('point_source','none')}, tracked={n_tracked}")
+                      f"state=no lock/lost, tracked={n_tracked}")
             t_udp1 = time.monotonic()
 
             vis = ctx.frame.copy()

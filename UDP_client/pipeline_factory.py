@@ -22,10 +22,10 @@ SOURCE_TYPE = "dsj"
 MP4_PATH = None  # only used when SOURCE_TYPE == "mp4"; None = detection_pipeline/sources/example.mp4
 
 # --- Detection mode selection ---
-# "branch" = tree branch segmentation pipeline -> final_point
+# "branch" = tree branch segmentation pipeline -> best_candidate
 # "aruco"  = direct ArUco marker detection -> ibvs/sources/ArucoSource.py
 DETECTION_MODE = "branch"
-# "auto" tries every predefined ArUco dictionary EVERY frame (no warmup, see
+# "auto" tries every predefined ArUco dictionary EVERY frame (see
 # ArucoSource.py) and uses whichever finds the tag -- costs more per frame than
 # pinning one. Set to a specific name (e.g. "DICT_4X4_50") once you know your
 # tag's dictionary, to keep detection cheap on every frame.
@@ -109,14 +109,13 @@ def build_pipeline(record_prefix=None, fps=10):
             from postprocessing.geometry.DistanceHeatmap import DistanceHeatmap
             from postprocessing.geometry.BitmaskSkeleton import BitmaskSkeleton
             from postprocessing.scoring.CandidateScoring import CandidateScoring
-            from postprocessing.scoring.WarmupFinalPoint import WarmupFinalPoint
             from postprocessing.scoring.CandidateVisualizer import CandidateVisualizer
             from pipeline.DetectionPipeline import DetectionPipeline
 
             dp_tracker = ByteTrack(dp_detector)
             dp_postprocessor = PostProcessor([
                 MaskExtraction(), DistanceHeatmap(), BitmaskSkeleton(),
-                CandidateScoring(), WarmupFinalPoint(), CandidateVisualizer(),
+                CandidateScoring(), CandidateVisualizer(),
             ])
             dp_pipeline = DetectionPipeline(dp_source, dp_detector, dp_tracker, dp_postprocessor)
 
@@ -140,9 +139,7 @@ def build_pipeline(record_prefix=None, fps=10):
                             cv2.waitKey(1)
                         yield {
                             "frame": ctx.frame,
-                            "final_point": ctx.final_point,
                             "best_candidate": ctx.best_candidate,
-                            "reference_frame": ctx.reference_frame,
                         }
                 finally:
                     if detection_writer is not None:
@@ -175,6 +172,7 @@ def build_pipeline(record_prefix=None, fps=10):
     tracker = KLTTracker(
         feature_extractor=feature_extractor,
         min_features=config.get("controller.min_features", 8),
+        recovery=config.get("recovery.enabled", True),
     )
 
     controller = PointController(
@@ -192,6 +190,7 @@ def build_pipeline(record_prefix=None, fps=10):
         # not on every already-tracked frame. None in ArUco mode, where
         # `source` never runs anything heavy in the first place.
         raw_source=dp_source if DETECTION_MODE == "branch" else None,
+        recovery=config.get_section("recovery"),
     )
 
     return source, pipeline

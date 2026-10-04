@@ -18,7 +18,8 @@ def main():
         for ctx in pipeline.run():
             
 
-            target_point = ctx.estimated_point if ctx.estimated_point is not None else ctx.point
+            # Only a locked, tracked point is ever sent (nothing while idle or lost)
+            target_point = ctx.estimated_point
 
             if target_point is not None:
                 sender.send(int(round(target_point[0])), int(round(target_point[1])))
