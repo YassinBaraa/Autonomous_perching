@@ -1,13 +1,11 @@
-% TODO: dovrsiti/uskladiti nakon Rezultata
-
 \noindent\textbf{\imeprezime}
 
 \noindent\textbf{\naslovrada}
 
 \bigskip
 
-\noindent Ovaj rad opisuje prilagodbu sustava za autonomno prijanjanje bespilotne letjelice na granu, izvorno razvijenog u sklopu diplomskog rada, za natjecateljski scenarij u kojem letjelica polazi već pozicionirana ispod grane, bez oslanjanja na sustav vanjske lokalizacije OptiTrack te bez korištenja senzora udaljenosti (ToF) za okidanje manevra prijanjanja. Fizička orijentacija kamere također je izmijenjena, s izvorne vodoravne (prema naprijed) na okomitu (prema gore). Percepcijski cjevovod za detekciju grane i praćenje točke prijanjanja, koji radi isključivo u slikovnoj ravnini, preuzet je bez izmjena, dok je upravljački ROS čvor koji je ovisio o vanjskoj lokalizaciji zamijenjen otvorenim paketom \texttt{ibvs\_perching}, koji letjelicom upravlja izravno preko MAVROS-a naredbama kutne brzine tijela i brzine penjanja. Rad opisuje potrebno preslikavanje osi između izlaza percepcije i naredbi letjelici u novoj geometriji te [TODO: dopuniti rezultatima eksperimentalne provjere].
+\noindent Ovaj rad opisuje prilagodbu upravljačkog sloja bespilotne letjelice za autonomno prijanjanje, namijenjenu scenariju u kojem letjelica polazi već pozicionirana ispod cilja, s kamerom okrenutom prema gore, bez oslanjanja na sustav vanjske lokalizacije i bez korištenja senzora udaljenosti za okidanje manevra prijanjanja. Ciljnu točku u slikovnoj ravnini osigurava percepcijski cjevovod, dok letjelicom izravno upravlja paket \texttt{ibvs\_perching}, slanjem ciljne orijentacije i naredbe brzine penjanja preko MAVROS-a. Rad opisuje potrebno preslikavanje osi između izlaza percepcije i naredbi letjelici u ovoj geometriji te eksperimentalnu provjeru sustava kroz tri koraka rastuće složenosti, od izvorne konfiguracije upravljačkog sloja do potpunog sustava s cjevovodom za detekciju grane. Rezultati potvrđuju da predloženi pristup uspješno ostvaruje prijanjanje bez oznake, oslanjajući se isključivo na pikselnu poziciju cilja i AHRS procjenu orijentacije letjelice.
 
 \bigskip
 
-\noindent\textbf{Ključne riječi:} bespilotna letjelica, prijanjanje na granu, vizualno serviranje temeljeno na slici, autonomno upravljanje, računalni vid
+\noindent\textbf{Ključne riječi:} bespilotna letjelica, prijanjanje, vizualno navođenje temeljeno na slici, autonomno upravljanje, letjelica bez vanjske lokalizacije

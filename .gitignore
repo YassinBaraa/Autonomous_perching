@@ -5,6 +5,7 @@
 */sam3
 *bag
 *.mp4
+*.pdf
 
 # LaTeX build artifacts (paper/)
 *.aux

@@ -1,13 +1,11 @@
-% TODO: finalize/align after Results
-
 \noindent\textbf{\imeprezime}
 
 \noindent\textbf{\naslovradaEN}
 
 \bigskip
 
-\noindent This paper describes the adaptation of an autonomous UAV branch-perching system, originally developed as part of a master's thesis, for a competition scenario in which the UAV starts already positioned beneath the branch, without relying on the OptiTrack external localization system and without using a time-of-flight (ToF) sensor to trigger the perching maneuver. The physical camera orientation has also changed, from the original forward-facing mount to an upward-facing one. The perception pipeline for branch detection and perch-point tracking, which operates purely in the image plane, is reused unchanged, while the ROS control node that depended on external localization is replaced with the open-source \texttt{ibvs\_perching} package, which commands the UAV directly through MAVROS using body-rate and climb-rate commands. The paper describes the axis remapping required between the perception output and the UAV commands in the new geometry, and [TODO: complete with experimental validation results].
+\noindent This paper describes an adaptation of a UAV flight control layer for autonomous perching, for a scenario in which the UAV starts already positioned beneath the target, with the camera facing upward, without relying on external localization and without using a distance sensor to trigger the perching maneuver. The target point in the image plane is provided by a perception pipeline, while the UAV is commanded directly through the \texttt{ibvs\_perching} package, by sending a target orientation and a climb-rate command via MAVROS. The paper describes the axis mapping required between the perception output and the UAV commands in this geometry, and the experimental validation of the system through three steps of increasing complexity, from the control layer's original configuration to the complete system with the branch-detection pipeline. The results confirm that the proposed approach successfully achieves markerless perching, relying solely on the pixel position of the target and the UAV's AHRS orientation estimate.
 
 \bigskip
 
-\noindent\textbf{Key words:} unmanned aerial vehicle, branch perching, image-based visual servoing, autonomous control, computer vision
+\noindent\textbf{Key words:} unmanned aerial vehicle, perching, image-based visual servoing, autonomous control, UAV without external localization

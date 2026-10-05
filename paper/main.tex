@@ -1,28 +1,40 @@
 \documentclass[12pt,a4paper]{report}
 
-% --- Prilog 2, tocka 2: Times New Roman ili Arial, velicina 10/11/12, prored 1.5 ili 2 ---
-% Pravi "Times New Roman" (ttf-mscorefonts-installer), ucitan preko fontspec + LuaLaTeX.
 \usepackage{fontspec}
 \setmainfont{Times New Roman}
 \usepackage{setspace}
 \onehalfspacing % 1.5 reda; za dvostruki prored zamijeniti s \doublespacing
 
 \usepackage[a4paper,margin=2.5cm]{geometry}
-\usepackage[english,croatian]{babel} % zadnji naveden (croatian) postaje glavni jezik dokumenta
+\usepackage[english,croatian]{babel}
 \usepackage{graphicx}
 \usepackage{caption}
-% Prilog 2, tocka 3: nazivi/opisi slika ISPOD slike, tablica IZNAD tablice (default u LaTeX-u)
+\usepackage{titlesec}
+\titleformat{\chapter}[hang]{\normalfont\huge\bfseries}{\thechapter}{1em}{}
+\titlespacing*{\chapter}{0pt}{0pt}{20pt}
+
 \usepackage{amsmath}
 \usepackage[hidelinks]{hyperref}
 \usepackage{csquotes}
+\usepackage{listings}
+\usepackage{xcolor}
+\lstset{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray},
+  stringstyle=\color{orange},
+  breaklines=true,
+  frame=single,
+  language=Python
+}
 \usepackage[
   style=numeric,
   sorting=none
 ]{biblatex}
 \addbibresource{references.bib}
 
-\newcommand{\naslovrada}{Autonomno prijanjanje bespilotne letjelice na granu bez oslanjanja na sustav vanjskog pozicioniranja}
-\newcommand{\naslovradaEN}{Autonomous UAV Branch Perching Without External Positioning}
+\newcommand{\naslovrada}{Autonomno prijanjanje bespilotne letjelice bez oslanjanja na sustav vanjskog pozicioniranja}
+\newcommand{\naslovradaEN}{Autonomous UAV Perching Without External Positioning}
 \newcommand{\imeprezime}{Baraa Yassin}
 \newcommand{\mentor}{prof.\ dr.\ sc.\ Matko Orsag}
 \newcommand{\ustrojbenajedinica}{Laboratoriju za robotiku i inteligentne sustave upravljanja (LARICS), Zavod za automatiku i računalno inženjerstvo, Fakultet elektrotehnike i računarstva}
@@ -40,7 +52,7 @@
 Sveučilište u Zagrebu\\
 Fakultet elektrotehnike i računarstva
 
-\vspace{4cm}
+\vfill
 
 {\Large \imeprezime}
 
@@ -71,12 +83,21 @@ Ovaj rad izrađen je u \ustrojbenajedinica{} pod vodstvom \mentor{} i predan je 
 \thispagestyle{empty}
 \begin{description}
   \item[UAV] \emph{Unmanned Aerial Vehicle} -- bespilotna letjelica
-  \item[IBVS] \emph{Image-Based Visual Servoing} -- vizualno serviranje temeljeno na slici
+  \item[YOLO] \emph{You Only Look Once} (arhitektura modela za detekciju/segmentaciju)
+  \item[IBVS] \emph{Image-Based Visual Servoing} -- vizualno navođenje temeljeno na slici
   \item[KLT] \emph{Kanade--Lucas--Tomasi} (praćenje značajki)
-  \item[ToF] \emph{Time-of-Flight} -- vremenski senzor udaljenosti
   \item[ROS] \emph{Robot Operating System}
+  \item[MAVROS] most između sustava MAVLink i ROS-a
   \item[UDP] \emph{User Datagram Protocol}
+  \item[JSON] \emph{JavaScript Object Notation}
   \item[FCU] \emph{Flight Control Unit} -- upravljačka jedinica leta
+  \item[AHRS] \emph{Attitude and Heading Reference System} -- sustav za referenciranje stava i smjera
+  \item[IMU] \emph{Inertial Measurement Unit} -- inercijska mjerna jedinica
+  \item[GPS] \emph{Global Positioning System}
+  \item[PID] proporcionalno-integracijsko-derivacijski regulator
+  \item[ONNX] \emph{Open Neural Network Exchange}
+  \item[USB] \emph{Universal Serial Bus}
+  \item[TOPS] \emph{Tera Operations Per Second} -- mjera računalne propusnosti akceleratora
 \end{description}
 
 \newpage
@@ -99,25 +120,25 @@ Ovaj rad izrađen je u \ustrojbenajedinica{} pod vodstvom \mentor{} i predan je 
 \label{ch:uvod}
 \input{sections/uvod}
 
-\chapter{Hipoteza i ciljevi rada}
-\label{ch:hipoteza}
-\input{sections/hipoteza}
+\chapter{Sustav i arhitektura}
+\label{ch:sustav}
+\input{sections/sustav}
 
-\chapter{Materijal i metode}
-\label{ch:metode}
-\input{sections/metode}
+\chapter{Percepcija i praćenje točke prijanjanja}
+\label{ch:percepcija}
+\input{sections/percepcija}
 
-\chapter{Rezultati}
+\chapter{Upravljanje letjelicom}
+\label{ch:upravljanje}
+\input{sections/upravljanje}
+
+\chapter{Eksperimenti}
+\label{ch:eksperimenti}
+\input{sections/eksperimenti}
+
+\chapter{Rezultati i rasprava}
 \label{ch:rezultati}
 \input{sections/rezultati}
-
-\chapter{Rasprava}
-\label{ch:rasprava}
-\input{sections/rasprava}
-
-\chapter{Zaključci}
-\label{ch:zakljucci}
-\input{sections/zakljucci}
 
 \chapter*{Zahvale}
 \input{sections/zahvale}

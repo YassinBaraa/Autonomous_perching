@@ -1,0 +1,30 @@
+{
+  "latex-workshop.latex.tools": [
+    {
+      "name": "lualatex",
+      "command": "lualatex",
+      "args": [
+        "-synctex=1",
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "%DOC%"
+      ]
+    },
+    {
+      "name": "biber",
+      "command": "biber",
+      "args": [
+        "%DOCFILE%"
+      ]
+    }
+  ],
+  "latex-workshop.latex.recipes": [
+    {
+      "name": "lualatex -> biber -> lualatex*2",
+      "tools": ["lualatex", "biber", "lualatex", "lualatex"]
+    }
+  ],
+  "latex-workshop.latex.recipe.default": "lualatex -> biber -> lualatex*2",
+  "latex-workshop.latex.rootFile.doNotUseWildcards": true,
+  "cmake.sourceDirectory": "/home/baraa/Desktop/Rektorova/ibvs_perching"
+}
