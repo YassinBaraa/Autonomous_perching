@@ -1,11 +1,11 @@
 [submodule "detection_pipeline"]
 	path = detection_pipeline
 	url = git@github.com:YassinBaraa/Diplomski_detection_pipeline.git
-	branch = rektor_modification
+	branch = research_paper
 [submodule "ibvs"]
 	path = ibvs
 	url = git@github.com:YassinBaraa/Diplomski_ibvs.git
-	branch = rektor_modification
+	branch = research_paper
 [submodule "UAV"]
 	path = UAV
 	url = git@github.com:YassinBaraa/Diplomski_uav.git
