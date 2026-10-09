@@ -138,6 +138,8 @@ def build_pipeline(record_prefix=None, fps=10):
                         yield {
                             "frame": ctx.frame,
                             "best_candidate": ctx.best_candidate,
+                            # grab time from the camera (DSJSource), for the packet's "age"
+                            "t_frame": (ctx.source_metadata or {}).get("t_frame"),
                         }
                 finally:
                     if detection_writer is not None:

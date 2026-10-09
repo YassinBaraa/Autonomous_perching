@@ -25,7 +25,8 @@ def main():
             target_point = ctx.estimated_point
 
             if target_point is not None:
-                sender.send(int(round(target_point[0])), int(round(target_point[1])))
+                sender.send(int(round(target_point[0])), int(round(target_point[1])),
+                            size=ctx.target_size, t_frame=ctx.t_frame)
 
             end = time.time()
             print(f"Time delay to compute: {end-start} \n")

@@ -58,7 +58,8 @@ def main():
 
             t_udp0 = time.monotonic()
             if target_point is not None:
-                sender.send(int(round(target_point[0])), int(round(target_point[1])))
+                sender.send(int(round(target_point[0])), int(round(target_point[1])),
+                            size=ctx.target_size, t_frame=ctx.t_frame)
                 print(f"[main] Frame {frame_count}: UDP sent — "
                       f"point=({target_point[0]}, {target_point[1]})")
             else:

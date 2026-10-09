@@ -21,10 +21,15 @@ Each frame, whichever entry point you run sends a UDP packet with the current ta
 JSON sent to `192.168.0.128:5005` (see `UDPSender` in `client/udp_client.py`) each frame that has a target point:
 
 ```json
-{"px": 412.3, "py": 198.7}
+{"px": 412, "py": 199, "size": 87.5, "age": 0.045}
 ```
 
-`px`/`py` are the perch/land point in pixel coordinates (image space, not offset from center). Nothing else is sent — no ToF/distance, it isn't used anywhere in the stack anymore.
+`px`/`py` are the perch/land point in pixel coordinates (image space, not offset from center). Two optional fields:
+
+- `size`: apparent size of the target in pixels on that frame, for the UAV's time-to-contact (only its growth matters; no real size or calibration). ArUco: mean side length of the marker. Branch: its width at the perch point (2 × the distance transform there). Left out when there is no detection matching the sent point on that frame (e.g. KLT-only frames in branch mode), or when the marker / branch cross-section is within 3 px of the image edge. Never smoothed.
+- `age`: seconds from grabbing the frame (`DSJSource`) to sending the packet, on this computer's `time.monotonic()`. Left out if outside [0, 1) or if the source has no grab time.
+
+No ToF/distance is sent.
 
 > **Receiving side note:** this repo has no UDP receiver for `ibvs_perching` (the current MAVROS/docker package) — it expects an `ibvs/target_point` `PointStamped` published directly in ROS (see `ibvs_perching/scripts/aruco_detector.py`). Bridging this UDP packet into `ibvs/target_point` would need a small ROS node on the docker side — out of scope here unless you want it built.
 
