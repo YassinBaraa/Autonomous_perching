@@ -180,7 +180,9 @@ def build_pipeline(record_prefix=None):
     tracker = KLTTracker(
         feature_extractor=feature_extractor,
         min_features=config.get("controller.min_features", 8),
-        recovery=config.get("recovery.enabled", True),
+        # No ORB recovery in ArUco mode: in the 2026-10-09 flight it re-locked onto the ceiling
+        # beam next to the tag. A lost tag is re-locked on its next ArUco detection instead.
+        recovery=config.get("recovery.enabled", True) and DETECTION_MODE != "aruco",
     )
 
     controller = PointController(
@@ -199,6 +201,9 @@ def build_pipeline(record_prefix=None):
         # `source` never runs anything heavy in the first place.
         raw_source=dp_source if DETECTION_MODE == "branch" else None,
         recovery=config.get_section("recovery"),
+        # ArUco detections are ID-checked: lock on the first one, re-lock whenever the
+        # tracked point is off the tag
+        trust_detections=DETECTION_MODE == "aruco",
     )
 
     return source, pipeline
