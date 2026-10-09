@@ -12,6 +12,7 @@ sys.path.insert(0, _UDP_CLIENT_DIR)
 
 from pipeline_factory import build_pipeline, HAS_DISPLAY
 from client.udp_client import UDPSender
+import reset_key
 
 RECORDINGS_DIR = Path(__file__).parent / "recordings"
 FPS = 10
@@ -27,6 +28,7 @@ def main():
     source, pipeline = build_pipeline(record_prefix=record_prefix, fps=FPS)
 
     sender = UDPSender()
+    reset_key.start()
     writer = None
     ibvs_writer = None
     frame_count = 0
@@ -34,6 +36,7 @@ def main():
     try:
         t_prev_frame = time.monotonic()
         for frame_count, ctx in enumerate(pipeline.run(), 1):
+            reset_key.check(pipeline, ctx)
             t_loop0 = time.monotonic()
             if writer is None:
                 h, w = ctx.frame.shape[:2]

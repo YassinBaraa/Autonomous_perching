@@ -8,14 +8,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pipeline_factory import build_pipeline
 from client.udp_client import UDPSender
+import reset_key
 
 
 def main():
     source, pipeline = build_pipeline()
     sender = UDPSender()
+    reset_key.start()
     try:
         start = time.time()
         for ctx in pipeline.run():
+            reset_key.check(pipeline, ctx)
             
 
             # Only a locked, tracked point is ever sent (nothing while idle or lost)

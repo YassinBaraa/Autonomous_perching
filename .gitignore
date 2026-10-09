@@ -19,3 +19,7 @@
 *.run.xml
 *.toc
 *.synctex.gz
+
+
+*.zip
+__pycache__

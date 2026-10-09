@@ -24,12 +24,13 @@ MP4_PATH = None  # only used when SOURCE_TYPE == "mp4"; None = detection_pipelin
 # --- Detection mode selection ---
 # "branch" = tree branch segmentation pipeline -> best_candidate
 # "aruco"  = direct ArUco marker detection -> ibvs/sources/ArucoSource.py
-DETECTION_MODE = "branch"
-# "auto" tries every predefined ArUco dictionary EVERY frame (see
+DETECTION_MODE = "aruco"
+# "auto" tries every predefined ArUco dictionary EVERY frame (no warmup, see
 # ArucoSource.py) and uses whichever finds the tag -- costs more per frame than
 # pinning one. Set to a specific name (e.g. "DICT_4X4_50") once you know your
 # tag's dictionary, to keep detection cheap on every frame.
-ARUCO_DICTIONARY = "DICT_ARUCO_ORIGINAL"
+#ARUCO_DICTIONARY = "DICT_ARUCO_ORIGINAL"
+ARUCO_DICTIONARY = "DICT_5X5_1000"  # superset of 5X5_50/100/250 (same first IDs), so it detects all four
 
 
 def _load_aruco_source_class():
@@ -94,14 +95,11 @@ def build_pipeline(record_prefix=None, fps=10):
             print(f"Camera: MP4 ({video_path})")
 
         if DETECTION_MODE == "branch":
-            if SOURCE_TYPE in ("dsj", "nicla"):
-                from detectors.HailoSegDetector import HailoSegDetector
-                dp_detector = HailoSegDetector(hef_path=str(_here / "model" / "yolov8_segmentation.hef"), conf=0.4)
-                print("Detector: Hailo (.hef)")
-            else:
-                from detectors.YOLOBranchSeg import YOLOBranchSeg
-                dp_detector = YOLOBranchSeg(model_path=str(_here / "model" / "best_small.pt"), conf=0.4)
-                print("Detector: YOLO (.pt)")
+            # Hailo AI HAT for every camera/source type (incl. mp4 playback),
+            # so offline tests run the same .hef model as flight.
+            from detectors.HailoSegDetector import HailoSegDetector
+            dp_detector = HailoSegDetector(hef_path=str(_here / "model" / "yolov8_segmentation.hef"), conf=0.5)
+            print("Detector: Hailo (.hef)")
 
             from trackers.ByteTrack import ByteTrack
             from postprocessing.PostProcessor import PostProcessor
@@ -158,6 +156,14 @@ def build_pipeline(record_prefix=None, fps=10):
     else:
         from sources.DetectionPipelineSource import DetectionPipelineSource
         source = DetectionPipelineSource(detection_iterator)
+
+        # DetectionPipelineSource.release() is a no-op, so the callers' source.release()
+        # never closed the camera or the Hailo device -- the process then hung on exit
+        # with the AI HAT still open. Release both here.
+        def _release():
+            dp_source.release()
+            dp_detector.release()
+        source.release = _release
         print("Detection mode: branch (segmentation)")
 
     feature_extractor = FASTHarrisExtractor(
