@@ -12,10 +12,10 @@ sys.path.insert(0, _UDP_CLIENT_DIR)
 
 from pipeline_factory import build_pipeline, HAS_DISPLAY
 from client.udp_client import UDPSender
+from video_recorder import VideoRecorder
 import reset_key
 
 RECORDINGS_DIR = Path(__file__).parent / "recordings"
-FPS = 10
 
 
 def main():
@@ -25,12 +25,15 @@ def main():
     out_path = f"{record_prefix}_raw.mp4"
     ibvs_out_path = f"{record_prefix}_ibvs_overlay.mp4"
 
-    source, pipeline = build_pipeline(record_prefix=record_prefix, fps=FPS)
+    source, pipeline = build_pipeline(record_prefix=record_prefix)
 
     sender = UDPSender()
     reset_key.start()
-    writer = None
-    ibvs_writer = None
+    # Encoded on background threads (one per file), so the loop never waits for the encoder
+    raw_rec = VideoRecorder(out_path)
+    ibvs_rec = VideoRecorder(ibvs_out_path)
+    print(f"Recording raw to {out_path}")
+    print(f"Recording IBVS overlay to {ibvs_out_path}")
     frame_count = 0
 
     try:
@@ -38,16 +41,9 @@ def main():
         for frame_count, ctx in enumerate(pipeline.run(), 1):
             reset_key.check(pipeline, ctx)
             t_loop0 = time.monotonic()
-            if writer is None:
-                h, w = ctx.frame.shape[:2]
-                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                writer = cv2.VideoWriter(str(out_path), fourcc, FPS, (w, h))
-                ibvs_writer = cv2.VideoWriter(str(ibvs_out_path), fourcc, FPS, (w, h))
-                print(f"Recording raw to {out_path}")
-                print(f"Recording IBVS overlay to {ibvs_out_path}")
 
             t_w1_0 = time.monotonic()
-            writer.write(ctx.frame)
+            raw_rec.add(ctx.frame)
             t_w1_1 = time.monotonic()
 
             ctrl = ctx.debug.get("controller", {})
@@ -90,7 +86,7 @@ def main():
                 cv2.arrowedLine(vis, center, tip, (0, 165, 255), 2, tipLength=0.3)
 
             t_w2_0 = time.monotonic()
-            ibvs_writer.write(vis)
+            ibvs_rec.add(vis)
             t_w2_1 = time.monotonic()
 
             if HAS_DISPLAY:
@@ -108,12 +104,16 @@ def main():
             t_prev_frame = t_loop0
 
     finally:
-        if writer is not None:
-            writer.release()
-            ibvs_writer.release()
-            print(f"Saved {frame_count} frames to {out_path} and {ibvs_out_path}")
         sender.close()
         source.release()
+        # Hardware first, then wait for the encoders to finish what is queued and finalize the files
+        raw_rec.close()
+        ibvs_rec.close()
+        if raw_rec.written:
+            print(f"Saved {raw_rec.written} frames at {raw_rec.fps} fps to {out_path} and {ibvs_out_path}")
+        if raw_rec.dropped or ibvs_rec.dropped:
+            print(f"Encoder fell behind: {raw_rec.dropped} raw / {ibvs_rec.dropped} overlay frames "
+                  f"left out of the recording (the loop itself was not slowed)")
         if HAS_DISPLAY:
             cv2.destroyAllWindows()
 

@@ -4,6 +4,8 @@ import os
 import cv2
 from pathlib import Path
 
+from video_recorder import VideoRecorder
+
 HAS_DISPLAY = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
 
 _UDP_CLIENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -45,7 +47,7 @@ def _load_aruco_source_class():
     return module.ArucoSource
 
 
-def build_pipeline(record_prefix=None, fps=10):
+def build_pipeline(record_prefix=None):
     """record_prefix: if given (e.g. RECORDINGS_DIR / timestamp), branch mode's
     "Detection Pipeline" debug-overlay window is also written to
     f"{record_prefix}_detection_overlay.mp4" as it's produced -- it's rendered
@@ -118,19 +120,17 @@ def build_pipeline(record_prefix=None, fps=10):
             dp_pipeline = DetectionPipeline(dp_source, dp_detector, dp_tracker, dp_postprocessor)
 
             def detection_iterator_gen():
-                detection_writer = None
+                detection_rec = None
                 try:
                     for ctx in dp_pipeline.run():
                         display = ctx.debug.get("branch_score_image", ctx.frame)
 
                         if record_prefix is not None:
-                            if detection_writer is None:
-                                dh, dw = display.shape[:2]
-                                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                            if detection_rec is None:
                                 detection_video_path = f"{record_prefix}_detection_overlay.mp4"
-                                detection_writer = cv2.VideoWriter(detection_video_path, fourcc, fps, (dw, dh))
+                                detection_rec = VideoRecorder(detection_video_path)
                                 print(f"Recording detection overlay to {detection_video_path}")
-                            detection_writer.write(display)
+                            detection_rec.add(display)
 
                         if HAS_DISPLAY:
                             cv2.imshow("Detection Pipeline", display)
@@ -142,8 +142,8 @@ def build_pipeline(record_prefix=None, fps=10):
                             "t_frame": (ctx.source_metadata or {}).get("t_frame"),
                         }
                 finally:
-                    if detection_writer is not None:
-                        detection_writer.release()
+                    if detection_rec is not None:
+                        detection_rec.close()
             detection_iterator = detection_iterator_gen()
     finally:
         if _DETECTION_PIPELINE_PATH in sys.path:
