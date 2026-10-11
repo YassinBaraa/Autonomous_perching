@@ -58,6 +58,7 @@ def build_pipeline(record_prefix=None):
     """
     from feature_extraction.FASTHarrisExtractor import FASTHarrisExtractor
     from trackers.KLTTracker import KLTTracker
+    from trackers.BranchWidthTracker import BranchWidthTracker
     from controller.PointController import PointController
     from pipeline.IBVSPipeline import IBVSPipeline
     from config import Config
@@ -135,9 +136,13 @@ def build_pipeline(record_prefix=None):
                         if HAS_DISPLAY:
                             cv2.imshow("Detection Pipeline", display)
                             cv2.waitKey(1)
+                        bc = ctx.best_candidate
                         yield {
                             "frame": ctx.frame,
-                            "best_candidate": ctx.best_candidate,
+                            "best_candidate": bc,
+                            # the best candidate's own branch mask, to seed the width measurement
+                            "mask": next((m for _, m, _, _, tid, _ in (ctx.tracks or [])
+                                          if bc is not None and tid == bc["track_id"]), None),
                             # grab time from the camera (DSJSource), for the packet's "age"
                             "t_frame": (ctx.source_metadata or {}).get("t_frame"),
                         }
@@ -204,6 +209,9 @@ def build_pipeline(record_prefix=None):
         # ArUco detections are ID-checked: lock on the first one, re-lock whenever the
         # tracked point is off the tag
         trust_detections=DETECTION_MODE == "aruco",
+        # Branch mode: the sent size is the branch width measured from the image edges on every
+        # frame (the detector doesn't run while tracking), seeded by the branch mask at lock
+        size_tracker=BranchWidthTracker() if DETECTION_MODE == "branch" else None,
     )
 
     return source, pipeline
