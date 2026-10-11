@@ -26,7 +26,7 @@ MP4_PATH = None  # only used when SOURCE_TYPE == "mp4"; None = detection_pipelin
 # --- Detection mode selection ---
 # "branch" = tree branch segmentation pipeline -> best_candidate
 # "aruco"  = direct ArUco marker detection -> ibvs/sources/ArucoSource.py
-DETECTION_MODE = "aruco"
+DETECTION_MODE = "branch"
 # "auto" tries every predefined ArUco dictionary EVERY frame (no warmup, see
 # ArucoSource.py) and uses whichever finds the tag -- costs more per frame than
 # pinning one. Set to a specific name (e.g. "DICT_4X4_50") once you know your
@@ -168,6 +168,9 @@ def build_pipeline(record_prefix=None):
         # never closed the camera or the Hailo device -- the process then hung on exit
         # with the AI HAT still open. Release both here.
         def _release():
+            # Finish the detection-overlay video first: left to garbage collection at exit, it was
+            # never finalized when the exit was cut short (2026-10-11 18:36 run)
+            detection_iterator.close()
             dp_source.release()
             dp_detector.release()
         source.release = _release
