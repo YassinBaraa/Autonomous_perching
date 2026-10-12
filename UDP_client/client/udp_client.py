@@ -17,7 +17,7 @@ class UDPSender:
     def send(self, px, py, size=None, t_frame=None):
         """size: target's apparent size [px] on this frame; t_frame: time.monotonic()
         when the frame was grabbed. Both optional: an invalid value leaves its key out
-        (never 0, NaN or null -- the receiver drops a packet it cannot parse)."""
+        (never 0, NaN or null -- the receiver drops a packet it cannot parse). Returns the packet sent."""
         try:
             packet = {
                 "px": int(round(px)),
@@ -34,8 +34,10 @@ class UDPSender:
             payload = json.dumps(packet).encode()
             self._sock.sendto(payload, self._addr)
             print(f"packet sent {payload.decode()} \n")
+            return packet   # what actually went out (shown in the recording overlay)
         except Exception as e:
             logger.warning(f"UDP send failed: {e}")
+            return None
 
     def close(self):
         self._sock.close()

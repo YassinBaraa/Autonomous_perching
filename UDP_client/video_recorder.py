@@ -32,11 +32,13 @@ class VideoRecorder:
         self._thread.start()
 
     def add(self, frame):
-        """Queue a copy of `frame`, stamped now. Never waits."""
+        """Queue a copy of `frame`, stamped now. Never waits. False if it was dropped (encoder too far behind)."""
         try:
             self._q.put_nowait((frame.copy(), time.monotonic()))
+            return True
         except queue.Full:
             self.dropped += 1
+            return False
 
     def close(self):
         """Encode what is still queued and finalize the file; returns once the file is complete."""
