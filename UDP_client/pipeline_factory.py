@@ -59,6 +59,7 @@ def build_pipeline(record_prefix=None):
     from feature_extraction.FASTHarrisExtractor import FASTHarrisExtractor
     from trackers.KLTTracker import KLTTracker
     from trackers.BranchWidthTracker import BranchWidthTracker
+    from trackers.TargetModel import TargetModel
     from controller.PointController import PointController
     from pipeline.IBVSPipeline import IBVSPipeline
     from config import Config
@@ -143,6 +144,8 @@ def build_pipeline(record_prefix=None):
                             # the best candidate's own branch mask, to seed the width measurement
                             "mask": next((m for _, m, _, _, tid, _ in (ctx.tracks or [])
                                           if bc is not None and tid == bc["track_id"]), None),
+                            # every segmented branch: confirms that a re-found target is on one
+                            "branch_mask": ctx.binary_mask,
                             # grab time from the camera (DSJSource), for the packet's "age"
                             "t_frame": (ctx.source_metadata or {}).get("t_frame"),
                         }
@@ -188,9 +191,13 @@ def build_pipeline(record_prefix=None):
     tracker = KLTTracker(
         feature_extractor=feature_extractor,
         min_features=config.get("controller.min_features", 8),
-        # No ORB recovery in ArUco mode: in the 2026-10-09 flight it re-locked onto the ceiling
-        # beam next to the tag. A lost tag is re-locked on its next ArUco detection instead.
-        recovery=config.get("recovery.enabled", True) and DETECTION_MODE != "aruco",
+        # No KLT ORB recovery in either mode. ArUco: it re-locked onto the ceiling beam next to the
+        # tag (2026-10-09); a lost tag is re-locked on its next detection instead. Branch: it found
+        # the stick again at a different spot (2026-10-12); the TargetModel finds the stored spot.
+        recovery=config.get("recovery.enabled", True) and DETECTION_MODE not in ("aruco", "branch"),
+        # Branch mode: a UAV holding still over the branch looked like a stale lock (4 healthy
+        # locks dropped on 2026-10-12); the TargetModel check catches a lock on the wrong thing.
+        drop_stalled=DETECTION_MODE != "branch",
     )
 
     controller = PointController(
@@ -215,6 +222,9 @@ def build_pipeline(record_prefix=None):
         # Branch mode: the sent size is the branch width measured from the image edges on every
         # frame (the detector doesn't run while tracking), seeded by the branch mask at lock
         size_tracker=BranchWidthTracker() if DETECTION_MODE == "branch" else None,
+        # Branch mode: the first locked point is stored and only ever found again at the same spot
+        # on the branch; a new point is chosen only after the operator's reset ('r')
+        target_model=TargetModel() if DETECTION_MODE == "branch" else None,
     )
 
     return source, pipeline

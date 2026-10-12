@@ -33,6 +33,5 @@ def check(pipeline, ctx):
     if _pressed.is_set():
         _pressed.clear()
         ctx.estimated_point = None  # this frame's point belongs to the dropped target
-        pipeline.tracker.unlock()
-        pipeline._lost_t0 = None
+        pipeline.reset_target()     # also forgets the stored target, so a new point gets chosen
         print("[reset] 'r' pressed — target dropped, searching for a new point")
