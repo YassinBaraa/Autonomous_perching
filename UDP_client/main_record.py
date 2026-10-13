@@ -16,9 +16,13 @@ from pipeline_factory import build_pipeline, HAS_DISPLAY
 from client.udp_client import UDPSender
 from video_recorder import VideoRecorder
 from overlay import frame_record, code_version
+from ros_state import ControllerState
 import reset_key
 
 RECORDINGS_DIR = Path(__file__).parent / "recordings"
+# Controller states (ibvs_perching, <ns>/ibvs/state) in which the UAV climbs to the branch: the
+# vision then holds the point -- it is only tracked, never moved by corrections or a re-pick.
+HOLD_STATES = {"CLIMBING", "STRIKE", "PUSH", "PERCHED"}
 
 
 def main():
@@ -31,6 +35,9 @@ def main():
     source, pipeline = build_pipeline(record_prefix=record_prefix)
 
     sender = UDPSender()
+    controller = ControllerState()
+    print(f"Following the controller state on {controller.topic} (point held while {', '.join(sorted(HOLD_STATES))})")
+    ctrl_state = None
     reset_key.start()
     # Encoded on a background thread, so the loop never waits for the encoder
     raw_rec = VideoRecorder(out_path)
@@ -49,6 +56,11 @@ def main():
         for frame_count, ctx in enumerate(pipeline.run(), 1):
             reset_key.check(pipeline, ctx)
             t_loop0 = time.monotonic()
+            if controller.state != ctrl_state:
+                ctrl_state = controller.state
+                print(f"[main] Frame {frame_count}: controller state {ctrl_state or 'unknown (no ROS)'}")
+            if hasattr(pipeline, "set_holding"):
+                pipeline.set_holding(ctrl_state in HOLD_STATES, f"controller {ctrl_state}")
 
             t_w1_0 = time.monotonic()
             raw_written = raw_rec.add(ctx.frame)
@@ -74,7 +86,8 @@ def main():
             if dt > 0:
                 rate_hz = 1.0 / dt if rate_hz is None else 0.9 * rate_hz + 0.1 / dt
             t_w2_0 = time.monotonic()
-            data_file.write(json.dumps(frame_record(ctx, pipeline, packet, rate_hz, raw_written)) + "\n")
+            data_file.write(json.dumps(dict(frame_record(ctx, pipeline, packet, rate_hz, raw_written),
+                                            ctrl=ctrl_state)) + "\n")
             t_w2_1 = time.monotonic()
 
             if HAS_DISPLAY:   # live view: camera image with just the target point (cheap)
