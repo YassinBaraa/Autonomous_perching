@@ -1,0 +1,47 @@
+{
+ "idle": {
+  "samples": 76,
+  "proc_cpu_pct": NaN,
+  "sys_cpu_pct": 7.3,
+  "rss_mb": NaN,
+  "rss_max_mb": null,
+  "soc_power_w": 1.8035,
+  "temp_c": 64.45
+ },
+ "searching": {
+  "samples": 42,
+  "proc_cpu_pct": 91.8,
+  "sys_cpu_pct": 104.5,
+  "rss_mb": 258.1484375,
+  "rss_max_mb": 274.875,
+  "soc_power_w": 2.9125,
+  "temp_c": 71.05,
+  "cpu_ms_per_frame": 171.5590909090909
+ },
+ "tracking": {
+  "samples": 33,
+  "proc_cpu_pct": 221.5,
+  "sys_cpu_pct": 239.3,
+  "rss_mb": 252.015625,
+  "rss_max_mb": 265.375,
+  "soc_power_w": 4.855,
+  "temp_c": 71.05,
+  "cpu_ms_per_frame": 48.59826203208555
+ },
+ "detector": {
+  "samples": 116,
+  "proc_cpu_pct": 78.05,
+  "sys_cpu_pct": 182.9,
+  "rss_mb": 202.640625,
+  "rss_max_mb": 209.4375,
+  "soc_power_w": 3.4965,
+  "temp_c": 72.7,
+  "cpu_ms_per_frame": 113.38557213930348
+ },
+ "replay_fps": {
+  "all": 23.182138005343138,
+  "tracking_median_period_ms": 14.999866485595703
+ },
+ "detector_only_fps": 7.176714079610334,
+ "note": "proc_cpu_pct: 100 % = one of the 4 Cortex-A76 cores; soc_power_w: sum of the Pi 5 PMIC rails (SoC, RAM, IO), not the USB camera or the Hailo HAT"
+}

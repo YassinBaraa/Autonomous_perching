@@ -1,0 +1,8 @@
+version,commits,change,runs,tracking_min,point_pct,size_pct,losses_per_min,putbacks_per_min,climbs,contact,perched
+pre-log,— / —,"10-12 morning flights, no vision log",0,0,,,,,3,2,2
+V1,accbfd3 / b5f758a*,"stored target, perch point kept until reset",4,3.5,74.0,91.2,7.18,12.63,7,2,1
+V2,bf252f2 / 7ef3c03*,"size self-heals, point held on its spot, features off crossings",2,1.7,93.3,93.7,10.25,8.44,2,2,0
+V3,e6cc71b / 48e97d0*,"hold through motion blur, no lock at the image edge",5,2.9,91.2,95.1,5.47,3.76,6,5,4
+V4,acc8538 / 721759c,"lock only where size works, steadier size, features added",9,7.7,89.7,97.7,3.77,10.01,0,0,0
+V4+,acc8538 / 721759c*,V4 + put-back checks under development,14,6.9,88.2,96.5,5.63,7.8,9,7,6
+V5,2deff6f / 5bef38d*,"put-back within 1 s, locks off crossings, size re-find limit",1,0.3,87.2,99.8,3.11,0.0,1,1,1

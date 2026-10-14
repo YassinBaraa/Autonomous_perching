@@ -1,0 +1,15 @@
+{
+ "segments_hold": 26,
+ "hold_seconds": 368.2,
+ "bags": 18,
+ "h_std_cm_median": 6.75,
+ "h_std_cm_time_weighted": 7.0589353612167285,
+ "h_p2p_cm_median": 27.05,
+ "vision_vs_mocap_r2_hold_median": 0.28,
+ "vision_vs_mocap_r2_climb": [
+  0.98,
+  0.69,
+  0.0
+ ],
+ "note": "inside a hold the height moves a few cm, the size noise (~2 % of ~1 m) is of the same order, so r^2 is low there; over a climb (tens of cm) the size follows the height (r^2 0.98)"
+}

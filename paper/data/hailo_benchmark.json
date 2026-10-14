@@ -1,0 +1,2 @@
+{"tool": "hailortcli benchmark model/yolov8_segmentation.hef", "date": "2026-10-14", "device": "Hailo-8 (AI HAT) on Raspberry Pi 5, PCIe gen 2 x1 (config.txt dtparam=pciex1_gen=2)",
+ "network": "yolov8m_seg, multi-context (3 contexts)", "fps_hw_only": 13.5039, "fps_streaming": 13.5037, "latency_hw_ms": 53.958}

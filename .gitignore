@@ -23,3 +23,6 @@
 
 *.zip
 __pycache__
+
+# exported ROS bags for the paper analysis (229 MB; regenerate with paper/scripts/export_bags.py)
+paper/data/bags/

@@ -1,0 +1,167 @@
+{
+ "frames": 1510,
+ "frames_with_detection": 1318,
+ "detections": 1703,
+ "detections_per_frame": {
+  "mean": 1.127814569536424,
+  "max": 4
+ },
+ "detection_frame_ms_median": {
+  "t_prep": 2.32,
+  "t_hailo": 51.885000000000005,
+  "t_dequant": 4.17,
+  "t_decode": 10.25,
+  "t_masks": 2.125,
+  "t_mask_merge": 2.3,
+  "t_heat": 3.91,
+  "t_skeleton": 26.06,
+  "t_scoring": 15.02,
+  "t_visualizer": 10.54
+ },
+ "detection_frame_ms_p90": {
+  "t_prep": 3.16,
+  "t_hailo": 52.543,
+  "t_dequant": 5.47,
+  "t_decode": 11.466,
+  "t_masks": 4.48,
+  "t_mask_merge": 4.653,
+  "t_heat": 4.6129999999999995,
+  "t_skeleton": 40.342,
+  "t_scoring": 22.223,
+  "t_visualizer": 13.75
+ },
+ "detection_frame_ms_sum_of_medians": 128.58,
+ "confidence": {
+  "vertical": {
+   "n": 1426,
+   "median": 0.8745
+  },
+  "horizontal": {
+   "n": 116,
+   "median": 0.75095
+  },
+  "diagonal": {
+   "n": 161,
+   "median": 0.8784
+  }
+ },
+ "mask_width_vs_edges": {
+  "n": 1216,
+  "edge_over_mask_median": 0.44945,
+  "iqr": [
+   0.389,
+   0.5432250000000001
+  ],
+  "mask_overestimate_factor": 2.2249415952831235,
+  "binned": [
+   [
+    6.0,
+    6.984999999999999
+   ],
+   [
+    8.0,
+    7.0649999999999995
+   ],
+   [
+    10.0,
+    6.86
+   ],
+   [
+    12.0,
+    6.49
+   ],
+   [
+    14.0,
+    7.17
+   ],
+   [
+    16.0,
+    7.25
+   ],
+   [
+    17.0,
+    7.6
+   ],
+   [
+    18.0,
+    7.57
+   ],
+   [
+    19.0,
+    7.3
+   ],
+   [
+    20.0,
+    7.925
+   ],
+   [
+    21.0,
+    7.79
+   ],
+   [
+    22.0,
+    8.44
+   ],
+   [
+    23.0,
+    9.11
+   ],
+   [
+    24.0,
+    10.51
+   ],
+   [
+    25.0,
+    11.81
+   ],
+   [
+    26.0,
+    13.795
+   ],
+   [
+    27.0,
+    13.190000000000001
+   ],
+   [
+    28.0,
+    14.47
+   ],
+   [
+    30.0,
+    14.81
+   ],
+   [
+    31.0,
+    18.25
+   ],
+   [
+    32.0,
+    19.725
+   ],
+   [
+    40.0,
+    28.26
+   ],
+   [
+    48.0,
+    39.745000000000005
+   ],
+   [
+    80.0,
+    73.22
+   ]
+  ]
+ },
+ "box_offset": {
+  "corrected_box_mask_gain_median": 0.2049188022153384,
+  "corrected_box_mask_gain_p90": 0.457619353836799,
+  "detections_gaining_over_10pct": 0.8590722254844392
+ },
+ "nms_format": {
+  "frames_where_correct_format_keeps_more": 0.009863429438543247,
+  "extra_detections_total": 12
+ },
+ "old_rule_picked_non_vertical": 0.03968871595330739,
+ "new_rule_frames_with_candidate": 0.9582701062215478,
+ "old_rule_frames_with_candidate": 0.9749620637329287
+}
