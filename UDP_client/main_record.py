@@ -18,6 +18,7 @@ from video_recorder import VideoRecorder
 from overlay import frame_record, code_version
 from ros_state import ControllerState
 import reset_key
+import live_view
 
 RECORDINGS_DIR = Path(__file__).parent / "recordings"
 # Controller states (ibvs_perching, <ns>/ibvs/state) in which the UAV climbs to the branch: the
@@ -33,6 +34,9 @@ def main():
     data_path = f"{record_prefix}_overlay.jsonl"
 
     source, pipeline = build_pipeline(record_prefix=record_prefix)
+    # Browser view of the camera with the perch point, and branch choice (live_view.py): only with
+    # LIVE_VIEW=1 (run_browser.sh); costs the loop nothing measurable
+    live = live_view.start()
 
     sender = UDPSender()
     controller = ControllerState()
@@ -55,6 +59,8 @@ def main():
         t_prev_frame = time.monotonic()
         for frame_count, ctx in enumerate(pipeline.run(), 1):
             reset_key.check(pipeline, ctx)
+            if live is not None:
+                live.apply_commands(pipeline, ctx)
             t_loop0 = time.monotonic()
             if controller.state != ctrl_state:
                 ctrl_state = controller.state
@@ -85,6 +91,8 @@ def main():
             dt = t_loop0 - t_prev_frame
             if dt > 0:
                 rate_hz = 1.0 / dt if rate_hz is None else 0.9 * rate_hz + 0.1 / dt
+            if live is not None:
+                live.publish(ctx, pipeline, packet, ctrl_state, rate_hz)
             t_w2_0 = time.monotonic()
             data_file.write(json.dumps(dict(frame_record(ctx, pipeline, packet, rate_hz, raw_written),
                                             ctrl=ctrl_state)) + "\n")

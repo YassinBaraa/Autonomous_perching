@@ -5,6 +5,7 @@ import cv2
 from pathlib import Path
 
 from video_recorder import VideoRecorder
+import live_view
 
 HAS_DISPLAY = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
 
@@ -138,12 +139,18 @@ def build_pipeline(record_prefix=None):
                             cv2.imshow("Detection Pipeline", display)
                             cv2.waitKey(1)
                         bc = ctx.best_candidate
+                        # the best candidate's own branch mask, to seed the width measurement
+                        bc_mask = next((m for _, m, _, _, tid, _ in (ctx.tracks or [])
+                                        if bc is not None and tid == bc["track_id"]), None)
+                        live = live_view.current()
+                        chosen = False
+                        if live is not None:   # the branch chosen in the live view, if any
+                            bc, bc_mask, chosen = live.choose(ctx, bc, bc_mask)
                         yield {
                             "frame": ctx.frame,
                             "best_candidate": bc,
-                            # the best candidate's own branch mask, to seed the width measurement
-                            "mask": next((m for _, m, _, _, tid, _ in (ctx.tracks or [])
-                                          if bc is not None and tid == bc["track_id"]), None),
+                            "mask": bc_mask,
+                            "chosen": chosen,   # chosen by the operator: the lock tolerates more motion
                             # every segmented branch: confirms that a re-found target is on one
                             "branch_mask": ctx.binary_mask,
                             # grab time from the camera (DSJSource), for the packet's "age"
