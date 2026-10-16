@@ -104,6 +104,7 @@ def build_pipeline(record_prefix=None):
             # so offline tests run the same .hef model as flight.
             from detectors.HailoSegDetector import HailoSegDetector
             dp_detector = HailoSegDetector(hef_path=str(_here / "model" / "yolov8_segmentation.hef"), conf=0.5)
+            live_view.register_detector(dp_detector)   # its confidence threshold can be changed in the live view
             print("Detector: Hailo (.hef)")
 
             from trackers.ByteTrack import ByteTrack

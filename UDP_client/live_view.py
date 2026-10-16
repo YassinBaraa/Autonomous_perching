@@ -10,18 +10,28 @@ stored target and, while searching, every detected branch: tinted by what can be
 numbered. Click a branch (or press its number, in the page or in the terminal) to make the vision lock
 on that branch; 'a' returns to the automatic choice, 'm' (manual) waits for your choice before
 locking, 'r' drops the target and the branch choice (manual: choose again; automatic: the vision picks
-again). A lost target is found again on the chosen branch. Branches that drop out of the detection for
-a moment (motion) stay shown and clickable for SEEN_KEEP_S. LIVE_VIEW_MANUAL=1 starts in manual mode.
+again). A lost target is found again on the chosen branch. Only the branches of the latest detection
+frame are shown. LIVE_VIEW_MANUAL=1 starts in manual mode.
+
+The page also sets the camera's exposure: a time in ms (manual) or automatic. It is applied with
+v4l2-ctl in the web server's thread, never in the flight loop, and stays on the camera until it is
+changed again or the camera loses power (so it also holds for later runs, with or without the page).
+The detector's confidence threshold can be changed on the page as well; it holds for the current run
+only (every run starts with the value set in pipeline_factory.py).
 
 Cost for the flight loop: publish() and apply_commands() only store references and read a few
 values (microseconds). Drawing and JPEG encoding run in a separate thread, and only while at least
 one browser is connected. Off unless LIVE_VIEW=1 (run_browser.sh sets it; run_record.sh does not);
 change the port with LIVE_VIEW_PORT.
 """
+import glob
 import http.server
 import json
+import math
 import os
+import re
 import socket
+import subprocess
 import threading
 import time
 
@@ -31,10 +41,11 @@ import numpy as np
 LIVE_FPS = 10.0
 STREAM_SCALE = 0.5            # 1280x720 -> 640x360
 JPEG_QUALITY = 72
-SEEN_KEEP_S = 1.5             # a branch missing from the detection stays shown and clickable this long
+SEEN_KEEP_S = 0.0             # a branch missing from the detection stays shown and clickable this long
+                              # (was 1.5 s: the faded old masks over a moving image looked wrong)
 CLICK_RADIUS_PX = 80          # [frame px] a click this close to a shown branch's mask chooses it
 PENDING_RADIUS_PX = 120       # [frame px] a click on no shown branch: the first branch detected this close
-CANDIDATES_SHOW_S = 1.0       # nothing is listed when the detection has not run for this long (tracking)
+CANDIDATES_SHOW_S = 0.3       # nothing is shown when the detection has not run for this long (tracking)
 
 # Overlay colours (BGR) -- the page uses the same ones
 COL = {"choosable": (255, 200, 0), "auto": (0, 196, 255), "chosen": (200, 64, 255), "end": (0, 128, 255),
@@ -69,6 +80,10 @@ def start(port=None):
         print("Live view: MANUAL -- nothing is locked until a branch is chosen")
     print(f"Live view: http://{_address()}:{port}   (or: ssh -L {port}:localhost:{port} <pi>, then http://localhost:{port})")
     print("  click a branch or press its number to choose it, 'm' wait for a choice, 'a' automatic, 'r' reset")
+    print(f"  camera exposure: {lv.exposure.describe()} (can be changed on the page)")
+    c = confidence_state()
+    if c["available"]:
+        print(f"  detector confidence: {c['value']:.2f} (can be changed on the page, for this run)")
     return lv
 
 
@@ -90,7 +105,8 @@ def _waiting():
 
 def _why(c):
     if c["status"] == "direction":
-        return "not vertical" + (f", {c['angle']:.0f} deg" if c.get("angle") is not None else "")
+        return "not vertical" + (f", {c['angle']:.0f} deg" if c.get("angle") is not None else "") + \
+            ("" if c["choosable"] else ", no point at all")
     if c["status"] == "end":
         return "too close to its end" + ("" if c["choosable"] else ", no point at all")
     return "ok"
@@ -116,6 +132,129 @@ def _mask_distance(mask, x, y, r):
     return d if d <= r else None
 
 
+# The segmentation detector (pipeline_factory registers it); the page sets its confidence threshold.
+# ByteTrack (track_activation_threshold 0.25) drops scores <= 0.1, and detections below 0.35 can only
+# extend an existing track, not start one.
+CONF_MIN, CONF_MAX = 0.1, 0.95
+_detector, _detector_default = None, None
+
+
+def register_detector(detector):
+    """The detector whose `conf` the page may change (its value now is the default)."""
+    global _detector, _detector_default
+    _detector, _detector_default = detector, round(float(detector.conf), 2)
+
+
+def confidence_state():
+    if _detector is None:
+        return dict(available=False, value=None, default=None, min=CONF_MIN, max=CONF_MAX)
+    return dict(available=True, value=round(float(_detector.conf), 2), default=_detector_default,
+                min=CONF_MIN, max=CONF_MAX)
+
+
+def set_confidence(value):
+    """Set the detector's confidence threshold (limited to CONF_MIN..CONF_MAX); used from the next frame."""
+    if _detector is not None:
+        old = float(_detector.conf)
+        _detector.conf = round(min(max(float(value), CONF_MIN), CONF_MAX), 2)
+        print(f"[live] detector confidence: {_detector.conf:.2f} (was {old:.2f})")
+    return confidence_state()
+
+
+# Camera exposure (DSJ-3079-HE, UVC). exposure_time_absolute is in 0.1 ms (camera range 5 ms .. 1 s);
+# auto_exposure 1 = manual, 3 = automatic (aperture priority).
+CAMERA_GLOB = "/dev/v4l/by-id/*DSJ_UC60_Video*-video-index0"   # the device DSJSource opens
+EXPOSURE_UNIT_MS = 0.1
+AUTO_EXPOSURE_MANUAL, AUTO_EXPOSURE_AUTO = 1, 3
+
+
+class CameraExposure:
+    """Reads and sets the camera exposure with v4l2-ctl. Never raises: a failure is reported in
+    state()["error"] and the camera keeps its previous setting."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        devices = sorted(glob.glob(CAMERA_GLOB))
+        self.device = devices[0] if devices else None
+        self.min_ms, self.max_ms = 5.0, 1000.0
+        self._state = dict(available=self.device is not None, auto=None, ms=None,
+                           error=None if self.device else "camera not found")
+        if self.device:
+            self._read_range()
+            self.read()
+
+    def _ctl(self, *args):
+        r = subprocess.run(["v4l2-ctl", "-d", self.device, *args], capture_output=True, text=True, timeout=3)
+        if r.returncode != 0:
+            raise RuntimeError((r.stderr or r.stdout).strip() or f"v4l2-ctl exit code {r.returncode}")
+        return r.stdout
+
+    def _read_range(self):
+        try:
+            for line in self._ctl("--list-ctrls").splitlines():
+                if "exposure_time_absolute" in line:
+                    m = dict(re.findall(r"\b(min|max)=(-?\d+)", line))
+                    self.min_ms, self.max_ms = int(m["min"]) * EXPOSURE_UNIT_MS, int(m["max"]) * EXPOSURE_UNIT_MS
+        except Exception:
+            pass
+
+    def _read(self):
+        try:
+            v = dict(re.findall(r"(\w+):\s*(-?\d+)", self._ctl("--get-ctrl=auto_exposure,exposure_time_absolute")))
+            auto = int(v["auto_exposure"]) != AUTO_EXPOSURE_MANUAL
+            self._state.update(auto=auto, error=None,
+                               ms=None if auto else round(int(v["exposure_time_absolute"]) * EXPOSURE_UNIT_MS, 1))
+        except Exception as e:
+            self._state["error"] = f"could not read the exposure: {e}"[:200]
+        return self.state()
+
+    def read(self):
+        """Read the camera's current setting (it may have been changed outside the page)."""
+        if not self.device:
+            return self.state()
+        with self._lock:
+            return self._read()
+
+    def set_ms(self, ms):
+        """Manual exposure of `ms` milliseconds (limited to the camera's range)."""
+        if not self.device:
+            return self.state()
+        units = int(round(min(max(float(ms), self.min_ms), self.max_ms) / EXPOSURE_UNIT_MS))
+        with self._lock:
+            try:   # manual first: the time can only be set in manual mode
+                self._ctl(f"--set-ctrl=auto_exposure={AUTO_EXPOSURE_MANUAL}")
+                self._ctl(f"--set-ctrl=exposure_time_absolute={units}")
+            except Exception as e:
+                self._state["error"] = f"exposure not changed: {e}"[:200]
+                return self.state()
+            s = self._read()
+        print(f"[live] camera exposure: manual {s['ms']} ms" if s["error"] is None else f"[live] camera exposure: {s['error']}")
+        return s
+
+    def set_auto(self):
+        """Automatic exposure."""
+        if not self.device:
+            return self.state()
+        with self._lock:
+            try:
+                self._ctl(f"--set-ctrl=auto_exposure={AUTO_EXPOSURE_AUTO}")
+            except Exception as e:
+                self._state["error"] = f"exposure not changed: {e}"[:200]
+                return self.state()
+            s = self._read()
+        print("[live] camera exposure: automatic" if s["error"] is None else f"[live] camera exposure: {s['error']}")
+        return s
+
+    def state(self):
+        return dict(self._state, min_ms=self.min_ms, max_ms=self.max_ms)
+
+    def describe(self):
+        s = self.state()
+        if not s["available"] or s["auto"] is None:
+            return s["error"] or "unknown"
+        return "automatic" if s["auto"] else f"manual {s['ms']} ms"
+
+
 class LiveView:
     def __init__(self, port):
         self._lock = threading.Lock()
@@ -136,6 +275,7 @@ class LiveView:
         self._clients = 0
         self._wake = threading.Event()
         self.view_fps = 0.0
+        self.exposure = CameraExposure()
         self._server = http.server.ThreadingHTTPServer(("0.0.0.0", port), _handler(self))
         self._server.daemon_threads = True
         threading.Thread(target=self._server.serve_forever, name="live-view-http", daemon=True).start()
@@ -260,14 +400,14 @@ class LiveView:
     def choose(self, dctx, best, mask):
         """From the detection loop: remember the branches (for drawing, numbers and clicks) and return
         (candidate, mask, chosen) to lock on: the automatic best (chosen False), or the operator's
-        branch (chosen True). A branch rejected only for lack of room at its end ("end") is used when
-        chosen explicitly. While the chosen branch is not detected, (None, None, False)."""
+        branch (chosen True). A branch rejected only for lack of room at its end ("end"), or for its
+        direction ("direction"), is used when chosen explicitly. While the chosen branch is not detected, (None, None, False)."""
         now = time.monotonic()
         cands = list(dctx.candidates or [])
         rejected = list((getattr(dctx, "debug", None) or {}).get("rejected_candidates") or [])
         masks = {tid: m for _, m, _, _, tid, _ in (dctx.tracks or []) if tid is not None}
         best_tid = None if best is None else best.get("track_id")
-        usable = cands + [r for r in rejected if r["reason"] == "end" and "x" in r]
+        usable = cands + [r for r in rejected if r["reason"] in ("end", "direction") and "x" in r]
         with self._lock:
             for c in [dict(c, status="ok") for c in cands] + [dict(r, status=r["reason"]) for r in rejected]:
                 tid = c["track_id"]
@@ -277,7 +417,7 @@ class LiveView:
                 x1, y1, x2, y2 = (int(v) for v in c["bbox"])
                 self._seen[tid] = dict(
                     n=self._numbers[tid], track_id=tid, status=c["status"],
-                    choosable=c["status"] == "ok" or (c["status"] == "end" and "x" in c),
+                    choosable=c["status"] == "ok" or (c["status"] in ("end", "direction") and "x" in c),
                     x=int(c["x"]) if "x" in c else (x1 + x2) // 2, y=int(c["y"]) if "y" in c else (y1 + y2) // 2,
                     has_point="x" in c, confidence=round(float(c.get("confidence") or 0.0), 3), bbox=[x1, y1, x2, y2],
                     angle=None if c.get("angle_deg") is None else round(float(c["angle_deg"]), 0),
@@ -333,7 +473,8 @@ class LiveView:
         return dict(info, candidates=branches, frame=None if frame is None else [frame.shape[1], frame.shape[0]],
                     selection=None if sel is None else {"n": sel.get("n"), "xy": _r(sel.get("xy")),
                                                         "waiting": sel.get("xy") is None and sel.get("track_id") is None},
-                    view_fps=round(self.view_fps, 1), clients=self._clients, manual=self.manual)
+                    view_fps=round(self.view_fps, 1), clients=self._clients, manual=self.manual,
+                    exposure=self.exposure.state(), confidence=confidence_state())
 
     def _render_loop(self):
         last_seq, t_last, n, t_fps = -1, 0.0, 0, time.monotonic()
@@ -370,7 +511,7 @@ class LiveView:
             return COL["chosen"]
         if not b["choosable"]:
             return COL["off"]
-        if b["status"] == "end":
+        if b["status"] in ("end", "direction"):   # choosable only by overriding a rule
             return COL["end"]
         return COL["auto"] if (auto_mode and b["auto"]) else COL["choosable"]
 
@@ -474,6 +615,8 @@ def _handler(lv):
                 self._send(200, _PAGE.encode(), "text/html; charset=utf-8")
             elif path == "/api/state":
                 self._send(200, json.dumps(lv.state()).encode(), "application/json")
+            elif path == "/api/exposure":   # read from the camera now
+                self._send(200, json.dumps(lv.exposure.read()).encode(), "application/json")
             elif path == "/snapshot.jpg":   # the page fetches frames one by one (works in every browser)
                 lv.client(+1)
                 try:
@@ -515,6 +658,30 @@ def _handler(lv):
             except ValueError:
                 body = {}
             path = self.path.split("?")[0]
+            if path == "/api/exposure":   # {"ms": 8.5} manual, or {"auto": true}
+                ms = body.get("ms") if isinstance(body, dict) else None
+                if isinstance(body, dict) and body.get("auto") is True:
+                    out, code = lv.exposure.set_auto(), 200
+                elif isinstance(ms, (int, float)) and not isinstance(ms, bool) and math.isfinite(ms) and ms > 0:
+                    out, code = lv.exposure.set_ms(ms), 200
+                else:
+                    out, code = dict(lv.exposure.state(), error="need {\"ms\": milliseconds > 0} or {\"auto\": true}"), 400
+                self._send(code, json.dumps(out).encode(), "application/json")
+                return
+            if path == "/api/confidence":   # {"value": 0.65}, or {"default": true}
+                v = body.get("value") if isinstance(body, dict) else None
+                if not confidence_state()["available"]:
+                    out, code = dict(confidence_state(), error="no detector (not in branch mode?)"), 409
+                elif isinstance(body, dict) and body.get("default") is True:
+                    out, code = set_confidence(_detector_default), 200
+                elif isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v):
+                    out, code = set_confidence(v), 200
+                else:
+                    out, code = dict(confidence_state(), error="need {\"value\": 0.1 .. 0.95} or {\"default\": true}"), 400
+                self._send(code, json.dumps(out).encode(), "application/json")
+                return
+            if not isinstance(body, dict):
+                body = {}
             if path == "/api/select":
                 fw, fh = (lv.state().get("frame") or [1280, 720])
                 if "n" in body:
@@ -607,6 +774,22 @@ kbd { font:600 11px var(--mono); padding:1px 6px; border-radius:5px; border:1px 
 .legend { display:grid; grid-template-columns:1fr 1fr; gap:6px 10px; font-size:12px; color:var(--muted); }
 .legend span::before { content:""; display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:-1px; background:var(--c); }
 .help { margin:0; color:var(--muted); font-size:12.5px; }
+.expo-now { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+.expo-now b { font:650 15px var(--mono); font-variant-numeric:tabular-nums; }
+.expo { display:grid; grid-template-columns:minmax(0,1fr) auto 76px; gap:8px; align-items:center; margin:0; }
+.expo input { width:100%; min-width:0; padding:9px 10px; border-radius:10px; border:1px solid var(--line); background:var(--panel2);
+              color:var(--ink); font:600 14px var(--mono); font-variant-numeric:tabular-nums; }
+.expo input:focus-visible { outline:2px solid var(--choosable); outline-offset:1px; }
+.expo .unit { color:var(--muted); font:600 13px var(--mono); }
+.btn.on { background:var(--ink); color:#0b0e11; border-color:var(--ink); }
+.btn:disabled, .expo input:disabled { opacity:.5; cursor:not-allowed; }
+#exp-err { color:var(--bad); font-size:12px; }
+.conf-row { display:grid; grid-template-columns:minmax(0,1fr) 52px; gap:10px; align-items:center; }
+.conf-row input[type=range] { width:100%; accent-color:var(--choosable); }
+.conf-row output { font:650 15px var(--mono); font-variant-numeric:tabular-nums; text-align:right; }
+.scale { display:flex; justify-content:space-between; color:var(--muted); font:500 11px var(--mono); margin-top:-6px; }
+#exp-err:empty { display:none; }
+.sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
 </style></head><body><div class="app">
 <header>
   <div class="brand"><span class="conn" id="conn" title="connection to the vision"></span>Perching vision</div>
@@ -628,17 +811,44 @@ kbd { font:600 11px var(--mono); padding:1px 6px; border-radius:5px; border:1px 
       <button class="btn" id="reset" title="Drop the target and the branch choice">Reset target <kbd>R</kbd></button>
     </div>
     <div class="card">
+      <h2>Camera exposure</h2>
+      <div class="expo-now"><span class="why">now</span><b id="exp-now">—</b></div>
+      <form class="expo" id="exp-form" autocomplete="off">
+        <label class="sr" for="exp-ms">Exposure time in milliseconds</label>
+        <input id="exp-ms" type="text" inputmode="decimal" placeholder="e.g. 8" title="Exposure time in milliseconds">
+        <span class="unit">ms</span>
+        <button class="btn" type="submit" id="exp-set">Set</button>
+      </form>
+      <button class="btn" id="exp-auto" title="The camera chooses the exposure">Automatic</button>
+      <div id="exp-err"></div>
+      <p class="help">Shorter: less motion blur, but a darker image (the camera has no gain). Indoors, below 10 ms the
+        lights may flicker; above 33 ms the frame rate drops.</p>
+    </div>
+    <div class="card">
+      <h2>Detection confidence</h2>
+      <div class="conf-row">
+        <label class="sr" for="conf">Minimum detection confidence</label>
+        <input id="conf" type="range" min="0.1" max="0.95" step="0.05" value="0.5">
+        <output id="conf-val" for="conf">—</output>
+      </div>
+      <div class="scale"><span>0.1 more detections</span><span>fewer, surer 0.95</span></div>
+      <button class="btn" id="conf-default">Default <span id="conf-def">0.50</span></button>
+      <p class="help">Applies from the next frame, for this run only. Higher removes weak detections, such as the ceiling
+        beam (about 0.55–0.6) but also faint branches; lower keeps blurred branches. Below 0.35 a weak detection can only keep a branch
+        that is already tracked, not add a new one.</p>
+    </div>
+    <div class="card">
       <h2>Branches</h2>
       <ul id="branches"><li class="empty">—</li></ul>
       <div class="legend">
         <span style="--c:var(--choosable)">can be chosen</span><span style="--c:var(--auto)">automatic pick</span>
-        <span style="--c:var(--chosen)">your choice</span><span style="--c:var(--end)">too close to its end</span>
-        <span style="--c:var(--off)">not vertical</span><span style="--c:var(--point)">perch point</span>
+        <span style="--c:var(--chosen)">your choice</span><span style="--c:var(--end)">choose to override a rule</span>
+        <span style="--c:var(--off)">can not be chosen</span><span style="--c:var(--point)">perch point</span>
       </div>
     </div>
     <p class="help">Click a branch in the image or press its number. A branch that drops out for a moment while
       you move stays shown (faded) and can still be clicked. <kbd>R</kbd> drops the target and the choice
-      (manual: choose again). Orange: choosing it overrides the end rule.</p>
+      (manual: choose again). Orange: too close to its end or not vertical; choosing it overrides that rule.</p>
   </aside>
 </main>
 </div>
@@ -666,6 +876,65 @@ async function frameLoop() {
 frameLoop();
 setInterval(() => { if (Date.now() - lastFrame > 3000) { offline.textContent = 'no new camera image for 3 s — retrying'; offline.hidden = false; } }, 1000);
 
+async function postJson(path, body) {
+  try {
+    const r = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {})});
+    return await r.json();
+  } catch (e) { toast('No connection to the vision'); return null; }
+}
+let expTyped = false;   // a typed value is kept (not replaced by the camera's) until it is sent
+$('exp-ms').addEventListener('input', () => { expTyped = true; });
+function showExposure(x) {
+  if (!x) return;
+  const inp = $('exp-ms'), now = $('exp-now');
+  for (const el of [inp, $('exp-set'), $('exp-auto')]) el.disabled = !x.available;
+  now.textContent = !x.available ? 'not available' : (x.auto == null ? '—' : (x.auto ? 'Automatic' : x.ms.toFixed(1) + ' ms'));
+  $('exp-auto').classList.toggle('on', x.auto === true);
+  $('exp-err').textContent = x.error || '';
+  inp.placeholder = 'e.g. 8  (' + x.min_ms + '–' + x.max_ms + ')';
+  if (x.auto === false && !expTyped && document.activeElement !== inp) inp.value = x.ms.toFixed(1);
+}
+$('exp-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const ms = parseFloat($('exp-ms').value.trim().replace(',', '.'));
+  if (!(ms > 0)) { toast('Enter the exposure time in ms'); return; }
+  const x = await postJson('/api/exposure', {ms});
+  if (!x) return;
+  expTyped = false;
+  showExposure(x);
+  toast(x.error ? 'Exposure not changed' : 'Exposure ' + x.ms.toFixed(1) + ' ms');
+  $('exp-ms').blur();
+});
+$('exp-auto').onclick = async () => {
+  const x = await postJson('/api/exposure', {auto: true});
+  if (!x) return;
+  showExposure(x);
+  toast(x.error ? 'Exposure not changed' : 'Automatic exposure');
+};
+fetch('/api/exposure', {cache:'no-store'}).then(r => r.json()).then(showExposure).catch(() => {});
+let confDragging = false;   // the slider is not moved by the state poll while it is being dragged
+function showConfidence(c) {
+  if (!c) return;
+  const sl = $('conf');
+  sl.disabled = $('conf-default').disabled = !c.available;
+  if (!c.available) { $('conf-val').textContent = 'n/a'; return; }
+  $('conf-def').textContent = c.default.toFixed(2);
+  if (!confDragging) { sl.value = c.value; $('conf-val').textContent = c.value.toFixed(2); }
+}
+$('conf').addEventListener('input', () => { confDragging = true; $('conf-val').textContent = (+$('conf').value).toFixed(2); });
+$('conf').addEventListener('change', async () => {
+  const c = await postJson('/api/confidence', {value: +$('conf').value});
+  confDragging = false;
+  if (!c) return;
+  showConfidence(c);
+  toast(c.error ? 'Confidence not changed' : 'Detection confidence ' + c.value.toFixed(2));
+});
+$('conf-default').onclick = async () => {
+  const c = await postJson('/api/confidence', {default: true});
+  if (!c) return;
+  showConfidence(c);
+  toast(c.error ? 'Confidence not changed' : 'Detection confidence ' + c.value.toFixed(2) + ' (default)');
+};
 function post(path, body) {
   return fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {})}).catch(() => {});
 }
@@ -686,6 +955,7 @@ $('manual').onclick = () => { post('/api/manual'); toast('Manual: choose a branc
 $('reset').onclick = () => { post('/api/reset'); toast('Target dropped'); };
 document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.closest && e.target.closest('input[type=text], textarea')) return;   // typing an exposure, not choosing a branch
   if (e.key >= '1' && e.key <= '9') post('/api/select', {n: +e.key});
   else if (e.key === 'a' || e.key === 'A') $('auto').click();
   else if (e.key === 'm' || e.key === 'M') $('manual').click();
@@ -695,11 +965,11 @@ document.addEventListener('keydown', e => {
 function colourOf(b, autoMode) {
   if (b.chosen) return COLORS.chosen;
   if (!b.choosable) return COLORS.off;
-  if (b.status === 'end') return COLORS.end;
+  if (b.status === 'end' || b.status === 'direction') return COLORS.end;
   return (autoMode && b.auto) ? COLORS.auto : COLORS.choosable;
 }
 function why(b) {
-  if (b.status === 'direction') return 'not vertical' + (b.angle != null ? ' · ' + b.angle + '°' : '');
+  if (b.status === 'direction') return 'not vertical' + (b.angle != null ? ' · ' + b.angle + '°' : '') + (b.choosable ? ' · choose to override' : '');
   if (b.status === 'end') return b.choosable ? 'too close to its end · choose to override' : 'too close to its end';
   return b.auto ? 'automatic pick' : 'can be chosen';
 }
@@ -738,6 +1008,8 @@ async function poll() {
     $('p-view').textContent = 'view ' + Math.round(s.view_fps) + ' fps';
     $('auto').classList.toggle('on', !s.manual);
     $('manual').classList.toggle('on', !!s.manual);
+    showExposure(s.exposure);
+    showConfidence(s.confidence);
     renderBranches(s);
     const n = s.selection && s.selection.n;
     if (tracking && !last.tracking) toast(n ? 'Locked on branch ' + n : 'Locked');
